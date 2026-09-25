@@ -1,0 +1,14 @@
+noulo
+Copyright 2026 Amzu Information Technology Ltd
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles the following third-party model weights, both licensed under the
+Apache License, Version 2.0:
+
+- nli-deberta-v3-xsmall (ONNX export by Xenova of cross-encoder/nli-deberta-v3-xsmall)
+  https://huggingface.co/Xenova/nli-deberta-v3-xsmall
+- all-MiniLM-L6-v2 (ONNX export by Xenova of sentence-transformers/all-MiniLM-L6-v2)
+  https://huggingface.co/Xenova/all-MiniLM-L6-v2
+
+Other models are downloaded on demand under their own licences, listed in docs/models.md.

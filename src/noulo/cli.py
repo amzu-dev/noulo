@@ -430,6 +430,11 @@ class Cli:
             )
         return self._service
 
+    def _interactive(self) -> bool:
+        """A person at a terminal (not an agent, script or CI job)."""
+        isatty = getattr(self.out, "isatty", None)
+        return bool(isatty and isatty())
+
     def global_args(self) -> list[str]:
         return ["--env-file", str(self.env_file.resolve())]
 
@@ -539,7 +544,10 @@ class Cli:
             extra.append("--learning" if overrides["learning_enabled"] else "--no-learning")
         ui = not self.args.headless
         return self._start_background(
-            ui=ui, open_browser=ui and not self.args.no_browser, extra_args=extra, **overrides
+            ui=ui,
+            open_browser=ui and not self.args.no_browser and self._interactive(),
+            extra_args=extra,
+            **overrides,
         )
 
     def cmd_stop(self) -> int:
@@ -693,7 +701,7 @@ class Cli:
         if interactive:
             reply = self.ask("noulo is not running. Start it now with the frontend? [Y/n] ")
             if reply.strip().lower() in ("", "y", "yes"):
-                return self._start_background(ui=True, open_browser=True)
+                return self._start_background(ui=True, open_browser=self._interactive())
         self.print("noulo is not running; start it with `noulo start`.")
         return EXIT_OK
 
@@ -909,6 +917,14 @@ def main(
     except CliError as exc:
         print(f"error: {exc}", file=stderr)
         return exc.code
+    except EOFError:
+        print(
+            "error: this command asks a question and needs an interactive terminal. "
+            "Pass the answer as arguments instead, e.g. `noulo model use <id>` "
+            "(see `noulo model list`) or `noulo learning clear --yes`.",
+            file=stderr,
+        )
+        return EXIT_USAGE
     except KeyboardInterrupt:
         return 130
 

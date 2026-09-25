@@ -305,6 +305,14 @@ def _http_fetch(url: str, dest: Path, progress: Callable[[str], None] | None = N
                     next_mark += 10
 
 
+def _present(path: Path) -> bool:
+    """A real file: exists and isn't a Git LFS pointer left by a clone without LFS."""
+    if not path.is_file():
+        return False
+    with path.open("rb") as fh:
+        return not fh.read(40).startswith(b"version https://git-lfs")
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
@@ -467,7 +475,7 @@ class ModelRegistry:
         kind = entry.kind if entry else "nli"
         extras = tuple(Path(f).name for f in entry.extra_files) if entry else ()
         model_dir = self.models_dir / model_id
-        return all((model_dir / name).exists() for name in (*_required(kind), *extras))
+        return all(_present(model_dir / name) for name in (*_required(kind), *extras))
 
     def list(self) -> list[dict[str, Any]]:
         """Public listing (no filesystem paths, no secrets)."""
@@ -536,7 +544,7 @@ class ModelRegistry:
 
     @staticmethod
     def _installed_path(path: Path, kind: str = "nli") -> bool:
-        return all((path / name).exists() for name in _required(kind))
+        return all(_present(path / name) for name in _required(kind))
 
     # ------------------------------------------------------------------ loading
 

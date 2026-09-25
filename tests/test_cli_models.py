@@ -361,3 +361,56 @@ def test_status_shows_model_and_device(learning_api, env_file):
         ["status"], api=learning_api, env_file=env_file, service=FakeService(running=True)
     )
     assert code == 0 and "device: cpu" in out
+
+
+# ---------------------------------------------------------------- no terminal (agents, scripts, CI)
+
+
+def _no_input(prompt):
+    raise EOFError
+
+
+def test_prompt_without_a_terminal_fails_cleanly_with_the_non_interactive_alternative(env_file):
+    out, err = io.StringIO(), io.StringIO()
+    code = main(
+        ["--url", UNREACHABLE, "model"],
+        stdout=out,
+        stderr=err,
+        stdin=io.StringIO(""),
+        env_file=env_file,
+        registry=FakeRegistry(),
+        service=FakeService(),
+        ask=_no_input,
+    )
+    assert code == 2
+    assert "interactive terminal" in err.getvalue() and "noulo model use" in err.getvalue()
+    assert "Traceback" not in err.getvalue()
+
+
+class TtyOut(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def _start(stdout, env_file):
+    opened = []
+    code = main(
+        ["start"],
+        stdout=stdout,
+        stderr=io.StringIO(),
+        stdin=io.StringIO(""),
+        env_file=env_file,
+        service=FakeService(),
+        browser=opened.append,
+    )
+    return code, opened
+
+
+def test_start_does_not_open_a_browser_without_a_terminal(env_file):
+    code, opened = _start(io.StringIO(), env_file)
+    assert code == 0 and opened == []
+
+
+def test_start_opens_the_frontend_for_a_person_at_a_terminal(env_file):
+    code, opened = _start(TtyOut(), env_file)
+    assert code == 0 and opened == ["http://127.0.0.1:8787/ui/"]

@@ -117,7 +117,7 @@ There's a status bar at the bottom (server, model, learning, current mode), hist
 
 | Command | What it does |
 |---|---|
-| `noulo start [--headless] [--foreground] [--no-browser]` | Start the service in the background with the frontend (`--headless`: API only) |
+| `noulo start [--headless] [--foreground] [--no-browser]` | Start the service in the background with the frontend (`--headless`: API only); opens the browser only when run from a terminal |
 | `noulo stop` · `restart` · `status` · `logs` | Manage the background service |
 | `noulo serve` | Run the API in the foreground, headless (for systemd, containers, CI) |
 | `noulo model` | **Pick a model** from 3 basic and 3 larger ones (size, quantisation, RAM and accuracy shown), or see how to plug in your own. A new model is downloaded, saved as the default and the service is restarted with the frontend |
@@ -409,5 +409,16 @@ openapi.json      generated API specification
 | [Architecture](docs/architecture.md) | Design, lifecycle, concurrency, invariants |
 | [Development](docs/development.md) | Tests, TDD workflow, extending noulo |
 
-The bundled model weights are third-party and Apache-2.0 licensed; see
-[models/README.md](models/README.md).
+## For AI agents
+
+Coding agents (Claude Code, Codex, Cursor and others) should read [AGENTS.md](AGENTS.md). It has
+the non-interactive install, run and test commands, which commands wait for a person, and the
+project conventions. The API is described by [openapi.json](openapi.json), and every CLI command
+has `--json` output and meaningful exit codes.
+
+## License
+
+noulo is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Amzu Information
+Technology Ltd; see [NOTICE](NOTICE). The bundled model weights are third-party and also
+Apache-2.0 licensed; see [models/README.md](models/README.md). Models downloaded on demand
+keep their own licences (listed in [docs/models.md](docs/models.md)).

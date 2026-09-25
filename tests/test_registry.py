@@ -507,3 +507,31 @@ def test_registry_resolves_a_placement_per_model_and_passes_it_to_the_loader(tmp
 def test_unknown_device_setting_is_rejected(tmp_path):
     with pytest.raises(ValueError, match="device"):
         ModelRegistry(tmp_path / "models", None, device="tpu")
+
+
+# ---------------------------------------------------------------- Git LFS pointers
+
+
+LFS_POINTER = "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 91000000\n"
+
+
+def test_lfs_pointer_files_do_not_count_as_installed(registry, tmp_path):
+    model_dir = install_fake(tmp_path / "models", "nli-deberta-v3-xsmall-int8")
+    (model_dir / "model.onnx").write_text(LFS_POINTER)
+    assert not registry.is_installed("nli-deberta-v3-xsmall-int8")
+    assert not {m["id"]: m for m in registry.list()}["nli-deberta-v3-xsmall-int8"]["installed"]
+
+
+def test_lfs_pointer_tokenizer_also_counts_as_missing(registry, tmp_path):
+    model_dir = install_fake(tmp_path / "models", "minilm-l6-v2-int8")
+    (model_dir / "tokenizer.json").write_text(LFS_POINTER)
+    assert not registry.is_installed("minilm-l6-v2-int8")
+
+
+def test_download_replaces_lfs_pointers_with_real_weights(registry, tmp_path):
+    model_dir = install_fake(tmp_path / "models", "nli-mobilebert-int8")
+    (model_dir / "model.onnx").write_text(LFS_POINTER)
+    files = {"model_quantized.onnx": b"real-weights", "tokenizer.json": b"{}", "config.json": b"{}"}
+    registry.download("nli-mobilebert-int8", fetch=fake_fetch(files))
+    assert registry.is_installed("nli-mobilebert-int8")
+    assert (model_dir / "model.onnx").read_bytes() == b"real-weights"

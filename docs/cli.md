@@ -21,7 +21,8 @@ Running `noulo` with no command opens the [interactive session](#interactive-ses
 
 ### `noulo start`
 
-Start the background service (with the frontend) and open the browser.
+Start the background service (with the frontend). When run from a terminal it also opens
+the browser; from scripts and agents it doesn't.
 
 | Flag | |
 |---|---|
