@@ -1,0 +1,12 @@
+{
+  "modelSizeBytes": 738563249,
+  "peakRssBytes": 1293697024,
+  "coldStartMs": 1878.054541986785,
+  "noulAccuracy": 0.91,
+  "noulEce": 0.07788967523189572,
+  "choiceAccuracy": 0.85,
+  "scoreMae": 0.11474474468780817,
+  "p50Ms": 28.465042007155716,
+  "p95Ms": 134.08662490255657,
+  "machine": "Apple M1 Pro"
+}

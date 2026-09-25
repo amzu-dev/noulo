@@ -35,7 +35,8 @@ What is covered:
 | Concurrency, queueing, graceful shutdown, model switching | `test_engine.py`, `test_api.py` |
 | OpenAI-compatible backend (mock transport, no network) | `test_openai_backend.py` |
 | Learning memory and every vector store (one contract suite) | `test_memory.py`, `test_vector_stores.py`, `test_engine_learning.py` |
-| CLI, shell, background service, model picker | `test_cli.py`, `test_cli_models.py`, `test_shell.py`, `test_service.py` |
+| CLI, background service, model pickers | `test_cli.py`, `test_cli_models.py`, `test_model_menu.py`, `test_service.py` |
+| Interactive session (commands, feedback, config editor, completion, arrow-key menus via pipe input, piped mode) | `test_repl.py`, `test_repl_terminal.py` |
 | OpenAPI validity and drift | `test_api.py`, `test_openapi_file.py` |
 | Real model end to end (spec examples) | `test_acceptance.py`, `test_e2e.py` |
 

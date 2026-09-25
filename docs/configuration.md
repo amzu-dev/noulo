@@ -48,6 +48,7 @@ noulo restart                            # most settings apply on the next start
 | `NOULO_MODELS_DIR` | `models` | Where local models live |
 | `NOULO_MODELS_FILE` | `models.json` | Your OpenAI-compatible endpoints, custom ONNX models and embedders |
 | `NOULO_THREADS` | unset | ONNX Runtime intra-op threads (unset = runtime default) |
+| `NOULO_LOW_MEMORY` | `false` | Skip ONNX constant folding: about 90 MiB less RAM for the default model, but ~3× slower per call and slightly different results |
 | `NOULO_OPENAI_BASE_URL` · `NOULO_OPENAI_MODEL` · `NOULO_OPENAI_API_KEY` | unset | Shortcut that registers one endpoint as model id `openai` |
 
 See [models.md](models.md) for the `models.json` format.

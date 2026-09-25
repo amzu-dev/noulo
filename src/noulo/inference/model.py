@@ -48,7 +48,16 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
 class OnnxNliModel:
     """A cross-encoder NLI model: (premise, hypothesis) -> label logits."""
 
-    def __init__(self, model_dir: str | Path, *, max_length: int = 512, threads: int | None = None):
+    def __init__(
+        self,
+        model_dir: str | Path,
+        *,
+        max_length: int = 512,
+        threads: int | None = None,
+        low_memory: bool = False,
+    ):
+        """low_memory skips constant folding, which otherwise re-materialises INT8
+        embedding tables as FP32 (~110 MiB less RAM for DeBERTa-xsmall, slightly slower)."""
         import onnxruntime as ort
         from tokenizers import Tokenizer
 
@@ -67,8 +76,9 @@ class OnnxNliModel:
             options.log_severity_level = 3
             if threads:
                 options.intra_op_num_threads = threads
+            extra = {"disabled_optimizers": ["ConstantFolding"]} if low_memory else {}
             self._session = ort.InferenceSession(
-                str(model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"]
+                str(model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"], **extra
             )
             self._input_names = {i.name for i in self._session.get_inputs()}
 

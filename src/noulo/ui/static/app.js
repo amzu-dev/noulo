@@ -597,8 +597,26 @@ function renderDiagnostics(r) {
 // ---------------------------------------------------------------- models
 
 function modelOptionLabel(m, active) {
-  return [m.id, m.local ? "local" : "remote", m.id === active && "active", !m.installed && "not installed"]
+  return [m.id, m.sizeMB && `${m.sizeMB} MB ${m.quantization}`, m.ramMB && `RAM ${m.ramMB} MB`,
+    m.local ? null : "remote", m.id === active && "active", !m.installed && "not installed"]
     .filter(Boolean).join(" · ");
+}
+
+const pct = (x) => (x == null ? null : `${Math.round(x * 100)}%`);
+
+function modelFacts(m) {
+  const rows = [
+    ["Tier", { basic: "basic", large: "larger (0.5-1 GB)",
+      experimental: "experimental (measured below the default; not recommended)" }[m.tier] || null],
+    ["Download", m.sizeMB ? `${m.sizeMB} MB` : null],
+    ["Quantisation", m.quantization],
+    ["RAM (measured peak)", m.ramMB ? `${m.ramMB} MB` : m.backend === "openai" ? "remote" : "not measured"],
+    ["Noul accuracy", pct(m.noulAccuracy)],
+    ["Choice accuracy", pct(m.choiceAccuracy)],
+    ["Score error (MAE)", m.scoreMae == null ? null : m.scoreMae.toFixed(3)],
+    ["Median latency", m.p50Ms == null ? null : `${Math.round(m.p50Ms)} ms`],
+  ].filter(([, value]) => value);
+  return h("dl", { class: "kv" }, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
 }
 
 function renderModels() {
@@ -623,6 +641,7 @@ function renderModelDetail() {
       m.id === active ? h("span", { class: "badge", "data-kind": "active" }, "active") : null,
       h("span", { class: "detail-mono" }, [m.backend, m.quantization].filter(Boolean).join(" · "))),
     m.description ? h("p", { class: "hint" }, m.description) : null,
+    modelFacts(m),
   );
 }
 

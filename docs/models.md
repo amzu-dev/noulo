@@ -10,16 +10,37 @@ A model is either:
 Every model goes through the same engine, validation, calibration, learning memory and
 output invariants.
 
-## The three curated models
+## Choosing a model
 
-| # | Id | Size | Noul acc | Choice acc | Score MAE | Server RAM | Pick it when |
-|---|---|---|---|---|---|---|---|
-| 1 | `nli-deberta-v3-xsmall-int8` (bundled) | 83 MB | **91.0%** | 67.5% | 0.205 | ~290 MiB | You want the best all-rounder (default) |
-| 2 | `nli-minilm2-l6-int8` | 79 MB | 87.0% | 52.5% | 0.253 | less (232 MiB peak in benchmark) | RAM or start-up time matters most (0.2 s cold start, 5 ms/call) |
-| 3 | `zeroshot-deberta-v3-xsmall-int8` | 83 MB | 87.0% | **70.0%** | 0.244 | similar to #1 | Choice-heavy workloads; best-calibrated Noul (ECE 0.092) |
+`noulo model`, `/model` in the interactive session, and the frontend's model panel all list
+the same options. Each shows the **download size**, **quantisation**, **measured RAM** (peak
+while benchmarking) and measured accuracy on the held-out test split.
 
-These figures are from the held-out test split; the full table and method are in
+### Basic models (< 100 MB)
+
+| Menu name | Id | Download | Quant | RAM (peak) | Noul | Choice | Score MAE | P50 |
+|---|---|---|---|---|---|---|---|---|
+| Balanced ★ (bundled) | `nli-deberta-v3-xsmall-int8` | 87 MB | INT8 | 443 MB | **91%** | 67.5% | 0.205 | 8 ms |
+| Fast & light | `nli-minilm2-l6-int8` | 83 MB | INT8 | 232 MB | 87% | 52.5% | 0.253 | 5 ms |
+| Best at Choice | `zeroshot-deberta-v3-xsmall-int8` | 87 MB | INT8 | 333 MB | 87% | 70.0% | 0.244 | 8 ms |
+
+### Larger models (0.5–1 GB)
+
+| Menu name | Id | Download | Quant | RAM (peak) | Noul | Choice | Score MAE | P50 |
+|---|---|---|---|---|---|---|---|---|
+| Most accurate | `zeroshot-deberta-v3-base-fp32` | 739 MB | FP32 (not quantised) | 1234 MB | 91% | **85.0%** | **0.115** | 29 ms |
+| Larger NLI | `nli-deberta-v3-base-fp32` | 739 MB | FP32 (not quantised) | 1419 MB | 89% | 70.0% | 0.175 | 30 ms |
+| BART (slow) | `nli-bart-large-fp16` | 816 MB | FP16 | 2010 MB | 91% | 70.0% | 0.205 | 182 ms |
+
+Pick a larger model when accuracy matters more than footprint. **Most accurate** gets 85%
+Choice accuracy (the small default gets 67.5%) and nearly halves the Score error, at about
+3× the RAM and latency. All figures were measured on an Apple M1 Pro; see
 [model-comparison.md](model-comparison.md).
+
+**Why no INT8 "large" model?** Two DeBERTa-v3-*large* INT8 exports (643 MB each) are in the
+catalog as `experimental`. They're installable with `noulo model use <id>` but aren't offered
+in the menus, because dynamic INT8 quantisation measurably damages them: Noul 77% and 64%,
+below the small default, while using 1.0–1.4 GB of RAM.
 
 ## Switching models
 
@@ -56,6 +77,11 @@ If a catalog model isn't installed, `noulo model use` downloads it first into
 | `nli-distilbert-int8` | Xenova/distilbert-base-uncased-mnli | INT8 | |
 | `zeroshot-xtremedistil-int8` | MoritzLaurer/xtremedistil-l6-h256-zeroshot-v1.1-all-33 | INT8 | 13 MB, 116 MiB RAM; weak Noul (69%) |
 | `zeroshot-deberta-v3-xsmall-int8` | MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33 | INT8 | 2-class zero-shot |
+| `zeroshot-deberta-v3-base-fp32` | MoritzLaurer/deberta-v3-base-zeroshot-v2.0 | FP32 | larger tier: most accurate (739 MB) |
+| `nli-deberta-v3-base-fp32` | cross-encoder/nli-deberta-v3-base | FP32 | larger tier (739 MB) |
+| `nli-bart-large-fp16` | Xenova/bart-large-mnli | FP16 | larger tier (816 MB) |
+| `nli-deberta-v3-large-int8` | cross-encoder/nli-deberta-v3-large | INT8 | experimental: quantisation-damaged (643 MB) |
+| `nli-deberta-v3-large-anli-int8` | MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli | INT8 | experimental: quantisation-damaged (643 MB) |
 | `minilm-l6-v2-int8` | Xenova/all-MiniLM-L6-v2 | INT8 | the learning-memory embedder (bundled) |
 
 ## OpenAI-compatible endpoints

@@ -21,6 +21,7 @@ def build_registry(settings: Settings) -> ModelRegistry:
         if settings.openai_api_key
         else None,
         threads=settings.threads,
+        low_memory=settings.low_memory,
     )
 
 

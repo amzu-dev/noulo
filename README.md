@@ -39,12 +39,12 @@ A
 
 ## Highlights
 
-- **Fully local by default:** CPU-only ONNX Runtime and Hugging Face `tokenizers`, with no PyTorch. The bundled model is 83 MB, and a running server uses about 290 MiB of RAM.
+- **Fully local by default:** CPU-only ONNX Runtime and Hugging Face `tokenizers`, with no PyTorch. The bundled model is 83 MB. A running server uses about 500 MiB of RAM, about 300 MiB with the Fast & light model, or about 410 MiB in low-memory mode.
 - **Strict outputs:** the model never writes free text. Noul and Score come from NLI probabilities, and Choice always returns one of your IDs. The hard invariants are enforced and tested.
 - **Calibrated Noul:** a separate calibration layer (temperature, Platt or isotonic) is fitted on held-out data for every model.
-- **Switchable models:** three curated local models, any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp), or your own ONNX model. You can switch at runtime without downtime, or via `noulo model`, which restarts the service.
+- **Switchable models:** three small models, three larger 0.5–1 GB models (each shown with download size, quantisation and measured RAM), any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp), or your own ONNX model. You can switch at runtime without downtime, or via `noulo model`, which restarts the service.
 - **Learning from inputs (RAG-style):** every case can be remembered, and feedback nudges future answers for similar inputs. It can be switched on or off live, and the vector store is pluggable: SQLite (default), Qdrant or Chroma (local or remote), or your own.
-- **Four ways in, one engine:** REST (`/api/v1`, OpenAPI), CLI plus interactive shell, Python module, and the web frontend.
+- **Four ways in, one engine:** REST (`/api/v1`, OpenAPI), a Claude Code-style interactive CLI, a Python module, and the web frontend.
 - **Safe defaults:** binds to `127.0.0.1` only, has no wildcard CORS, supports an optional API key, and never exposes filesystem paths or secrets.
 - **Measured, not assumed:** the `noulo benchmark` command reports accuracy, calibration, latency, RAM and cold start, and compares models.
 
@@ -65,7 +65,7 @@ To skip `uv run` before each command, activate the virtual environment
 
 ```bash
 noulo status          # is it running? which model?
-noulo                 # interactive shell: /model, /noul, /choice, /score, /learning ...
+noulo                 # interactive session: type inputs, /model, /config, /learning, /help ...
 noulo stop
 ```
 
@@ -74,6 +74,27 @@ then `noulo model download --missing` and `noulo start`.
 
 ## Using noulo
 
+### Interactive session
+
+Run `noulo` on its own to open a Claude Code-style session. Type a sentence and noulo
+evaluates it. Slash commands (with a completion menu as you type `/`) check or change
+everything else.
+
+```text
+❯ /noul The customer has an overdue payment.
+noul ❯ The invoice has been unpaid for 120 days.
+  ● Yes       0.95  ━━━━━━━━━━━━━━━━━━━━━━━─
+  57 ms · nli-deberta-v3-xsmall-int8
+noul ❯ /good                      # teach: that was right
+noul ❯ /model                     # arrow-key picker: size · quantisation · RAM · accuracy
+noul ❯ /config                    # settings editor; /config set port 9000 also works
+noul ❯ /learning off
+```
+
+There's a status bar at the bottom (server, model, learning, current mode), history with ↑/↓,
+`/verbose` for probability bars, and `/json` for raw responses. See the
+[interactive session docs](docs/cli.md#interactive-session).
+
 ### CLI
 
 | Command | What it does |
@@ -81,7 +102,7 @@ then `noulo model download --missing` and `noulo start`.
 | `noulo start [--headless] [--foreground] [--no-browser]` | Start the service in the background with the frontend (`--headless`: API only) |
 | `noulo stop` · `restart` · `status` · `logs` | Manage the background service |
 | `noulo serve` | Run the API in the foreground, headless (for systemd, containers, CI) |
-| `noulo model` | **Pick one of 3 curated models, or see how to plug in your own.** A new model is downloaded, saved as the default and the service is restarted with the frontend |
+| `noulo model` | **Pick a model** from 3 basic and 3 larger ones (size, quantisation, RAM and accuracy shown), or see how to plug in your own. A new model is downloaded, saved as the default and the service is restarted with the frontend |
 | `noulo model list \| use <id> \| download \| add-endpoint \| add-onnx \| remove` | Model management |
 | `noulo noul \| choice \| score \| evaluate` | Call the API (`--json` for full output incl. `recordId`, `--diagnostics` for probabilities) |
 | `noulo learning on \| off \| status \| records \| clear --yes` | Learning memory controls (applied live **and** saved to `.env`) |
@@ -89,7 +110,7 @@ then `noulo model download --missing` and `noulo start`.
 | `noulo config show \| get \| set \| unset \| path` | View and edit settings in `.env` (validated, secrets redacted) |
 | `noulo benchmark [--model id ...] [--tune] [--all --download --compare file.md]` | Measure models |
 | `noulo openapi -o openapi.json` | Regenerate the OpenAPI document |
-| `noulo` | Interactive shell with slash commands (`/help`) |
+| `noulo` | Interactive session: type inputs to evaluate them, slash commands to check or change anything |
 
 ```bash
 noulo score -i "The production system is unavailable for every customer." \
@@ -165,20 +186,26 @@ toggle, feedback, the memory browser and diagnostics, in light and dark themes.
 
 ## Models
 
-`noulo model` offers three curated local models, chosen from the
-[measured comparison](docs/model-comparison.md):
+`noulo model` (and `/model` in the session, or the frontend) lists every option with its
+**download size, quantisation, measured RAM and accuracy**. The figures below are from the
+[measured comparison](docs/model-comparison.md) on the held-out test split:
 
-| # | Model | Size | Why pick it |
-|---|---|---|---|
-| 1 | `nli-deberta-v3-xsmall-int8` **(bundled default)** | 83 MB | Best Noul accuracy (91%); good Choice and Score |
-| 2 | `nli-minilm2-l6-int8` | 79 MB | Fast and light: about half the RAM, 0.2 s cold start, 5 ms per call |
-| 3 | `zeroshot-deberta-v3-xsmall-int8` | 83 MB | Best Choice accuracy (70%) and best-calibrated Noul |
+| Menu name | Model | Download | Quant | RAM (peak) | Noul | Choice | Score MAE |
+|---|---|---|---|---|---|---|---|
+| **Balanced ★** (bundled) | `nli-deberta-v3-xsmall-int8` | 87 MB | INT8 | 443 MB | **91%** | 67.5% | 0.205 |
+| Fast & light | `nli-minilm2-l6-int8` | 83 MB | INT8 | 232 MB | 87% | 52.5% | 0.253 |
+| Best at Choice | `zeroshot-deberta-v3-xsmall-int8` | 87 MB | INT8 | 333 MB | 87% | 70.0% | 0.244 |
+| **Most accurate** (larger) | `zeroshot-deberta-v3-base-fp32` | 739 MB | FP32 | 1234 MB | 91% | **85.0%** | **0.115** |
+| Larger NLI | `nli-deberta-v3-base-fp32` | 739 MB | FP32 | 1419 MB | 89% | 70.0% | 0.175 |
+| BART (slow) | `nli-bart-large-fp16` | 816 MB | FP16 | 2010 MB | 91% | 70.0% | 0.205 |
 
-Choosing 2 or 3 downloads it once from Hugging Face, sets `NOULO_MODEL`, and restarts the
-service with the frontend. Tuned templates and calibration for every catalog model ship in
-the package, so a downloaded model is tuned immediately.
+Choosing a model that isn't installed downloads it once from Hugging Face, sets
+`NOULO_MODEL`, and restarts the service with the frontend. Tuned templates, calibration and
+measurements for every catalog model ship in the package, so a downloaded model is tuned
+immediately. Two INT8 DeBERTa-*large* exports are kept as `experimental` and not offered,
+because quantisation measurably damages them (see [docs/models.md](docs/models.md)).
 
-**Plug in your own model** (option 4 prints these steps):
+**Plug in your own model** (the picker's last option prints these steps):
 
 ```bash
 # Any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp)
@@ -256,7 +283,7 @@ These are the default model's numbers on the held-out **test split** of the bund
 | Metric | `nli-deberta-v3-xsmall-int8` |
 |---|---|
 | Model size / quantisation | 83.2 MiB / INT8 |
-| Server RAM (steady state, model + embedder + API) | ~290 MiB RSS |
+| Server RAM (steady state, model + embedder + API) | ~500 MiB RSS (~410 MiB with `NOULO_LOW_MEMORY=true`) |
 | Benchmark process peak RAM | ~330–430 MiB |
 | Cold start (load + readiness check) | 0.5–0.7 s |
 | Latency P50 / P95 (mixed primitives) | 7.9 ms / 31.9 ms |
@@ -283,6 +310,9 @@ Windows, `noulo stop` terminates the process instead of sending a graceful signa
   own labelled data, or a larger or OpenAI-compatible model.
 - **Small evaluation set.** 120 Noul, 40 Choice and 35 Score test items give wide confidence
   intervals (±5–15 points). Treat the comparison as indicative.
+- **RAM sits right at the 500 MB target with the default model** (about 500 MiB RSS). Most of
+  it is ONNX constant folding and the DeBERTa tokenizer. Use the Fast & light model (~300 MiB),
+  `NOULO_LOW_MEMORY=true` (~410 MiB, ~3× slower), or learning off (−27 MiB) on tight machines.
 - **English only;** inputs longer than about 512 tokens (roughly 2,000 characters) are truncated
   for the NLI models.
 - **Calibration** is fitted on 100 labelled Noul items per model; ECE is about 0.1, not zero.
@@ -298,7 +328,7 @@ Windows, `noulo stop` terminates the process instead of sending a graceful signa
 
 ## Development
 
-The project was built test-first. There are 680+ tests in total: unit, property-based
+The project was built test-first. There are 740+ tests in total: unit, property-based
 (Hypothesis), API contract, CLI, vector-store contract, real-model acceptance, and an
 end-to-end test that drives a real background server through the CLI.
 
@@ -323,7 +353,8 @@ src/noulo/
   benchmark/      run.py · tune.py · metrics.py · report.py · data.py
   profiles/       tuned templates + calibration for every catalog model
   ui/static/      frontend (plain HTML/CSS/JS)
-  cli.py · shell.py · service.py · registry.py · config.py · runtime.py · embedded.py
+  repl/           interactive session: session.py · app.py · prompter.py · completion.py · render.py
+  cli.py · model_menu.py · service.py · registry.py · config.py · runtime.py · embedded.py
 models/           bundled models (Git LFS) + downloaded ones
 benchmark/data/   evaluation dataset (calibration + test splits)
 docs/             documentation
@@ -336,10 +367,10 @@ openapi.json      generated API specification
 | Guide | |
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first run, first requests |
-| [CLI reference](docs/cli.md) | Every command, the shell, exit codes |
+| [CLI reference](docs/cli.md) | Every command, the interactive session, exit codes |
 | [REST API](docs/api.md) | Endpoints, schemas, errors, auth, examples |
 | [Configuration](docs/configuration.md) | Every `NOULO_*` setting, `.env`, security |
-| [Models](docs/models.md) | Curated models, switching, OpenAI endpoints, your own ONNX, calibration |
+| [Models](docs/models.md) | Basic and larger models, switching, OpenAI endpoints, your own ONNX, calibration |
 | [Learning](docs/learning.md) | How the memory works, feedback, vector stores |
 | [Model comparison](docs/model-comparison.md) | Measured results for nine models and three quantisations |
 | [Architecture](docs/architecture.md) | Design, lifecycle, concurrency, invariants |

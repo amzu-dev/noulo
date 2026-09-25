@@ -91,18 +91,25 @@ evaluate({"type": "choice", "input": "Charged twice", "question": "Which team?",
 # {'type': 'choice', 'value': 'A'}
 ```
 
-## 4. Use the interactive shell
+## 4. Use the interactive session
 
-Run `noulo` with no arguments:
+Run `noulo` with no arguments. Type a sentence to evaluate it; the first time, you're asked
+what to check. Slash commands do everything else, and a menu appears as soon as you type `/`:
 
 ```text
-noulo 0.1.0 - local decision engine. Type /help for commands, /quit to exit.
-noulo> /noul
-  Input: The invoice has remained unpaid for 120 days.
-  Proposition: The customer has an overdue payment.
-0.968
-noulo> /model
+❯ /noul The customer has an overdue payment.
+  Noul mode - every line you type is checked against: “The customer has an overdue payment.”
+noul ❯ The invoice has been unpaid for 120 days.
+  ● Yes       0.95  ━━━━━━━━━━━━━━━━━━━━━━━─
+  57 ms · nli-deberta-v3-xsmall-int8
+noul ❯ All payments are up to date.
+  ● No        0.03  ━───────────────────────
+noul ❯ /config set max_queue 64
+  ✔ Saved NOULO_MAX_QUEUE=64 to .env.
+  Restart noulo now to apply it? [Y/n]
 ```
+
+`/help` lists every command. See [cli.md](cli.md#interactive-session).
 
 ## 5. Pick a model
 
@@ -113,16 +120,19 @@ noulo model
 ```text
 Current model: nli-deberta-v3-xsmall-int8
 
-Choose a model:
-  1) Balanced (bundled)   nli-deberta-v3-xsmall-int8         [installed]  <- current
-  2) Fast & light         nli-minilm2-l6-int8                [downloads when selected]
-  3) Best at Choice       zeroshot-deberta-v3-xsmall-int8    [downloads when selected]
-  4) Plug in your own model (OpenAI-compatible endpoint or ONNX)
-Select 1-4 (Enter keeps the current model):
+Choose a model (✓ installed · ↓ downloads when selected):
+   1) Balanced ★     nli-deberta-v3-xsmall-int8 (current)      87 MB INT8 · RAM 443 MB · Noul 91% · Choice 68% · ✓
+   2) Fast & light   nli-minilm2-l6-int8                       83 MB INT8 · RAM 232 MB · Noul 87% · Choice 52% · ↓
+   3) Best at Choice zeroshot-deberta-v3-xsmall-int8           87 MB INT8 · RAM 333 MB · Noul 87% · Choice 70% · ↓
+   4) Most accurate  zeroshot-deberta-v3-base-fp32             739 MB FP32 · RAM 1234 MB · Noul 91% · Choice 85% · ↓
+   5) Larger NLI     nli-deberta-v3-base-fp32                  739 MB FP32 · RAM 1419 MB · Noul 89% · Choice 70% · ↓
+   6) BART (slow)    nli-bart-large-fp16                       816 MB FP16 · RAM 2010 MB · Noul 91% · Choice 70% · ↓
+   7) Plug in your own model...
+Select 1-7 (Enter keeps the current model):
 ```
 
 A model that isn't installed is downloaded and saved as `NOULO_MODEL` in `.env`, and the
-running service restarts with it and the frontend. Option 4 explains how to use an
+running service restarts with it and the frontend. The last option explains how to use an
 OpenAI-compatible endpoint or your own ONNX model. See [models.md](models.md).
 
 ## 6. Teach it

@@ -118,3 +118,45 @@ def test_report_has_spec_fields_and_measured_values():
     ):
         assert label in text
     assert "86.8 MiB" in text and "90.0%" in text
+
+
+def test_write_measured_keeps_the_numbers_pickers_show(tmp_path):
+    from noulo.benchmark.run import write_measured
+
+    result = {
+        "model": "m",
+        "peakRssBytes": 1,
+        "modelSizeBytes": 2,
+        "noulAccuracy": 0.9,
+        "choiceAccuracy": 0.7,
+        "scoreMae": 0.2,
+        "p50Ms": 8.0,
+        "p95Ms": 30.0,
+        "coldStartMs": 500.0,
+        "noulEce": 0.1,
+        "items": {"noul": 1},
+    }
+    write_measured(tmp_path / "m", result, machine="Apple M1 Pro")
+    saved = json.loads((tmp_path / "m" / "measured.json").read_text())
+    assert saved["peakRssBytes"] == 1 and saved["noulAccuracy"] == 0.9
+    assert saved["machine"] == "Apple M1 Pro" and "items" not in saved
+
+
+def test_low_memory_runs_do_not_overwrite_default_measurements(tmp_path, monkeypatch):
+    from noulo.benchmark import run
+
+    written = []
+    monkeypatch.setattr(
+        run, "_run_worker", lambda model_id, args: {"model": model_id, "peakRssBytes": 1}
+    )
+    monkeypatch.setattr(run, "write_measured", lambda *a, **k: written.append(a))
+    monkeypatch.setattr(run, "format_report", lambda r: "")
+    models = tmp_path / "models"
+    args = ["--model", "nli-mobilebert-int8", "--models-dir", str(models), "--out", str(tmp_path)]
+    (models / "nli-mobilebert-int8").mkdir(parents=True)
+    for name in ("model.onnx", "tokenizer.json", "config.json"):
+        (models / "nli-mobilebert-int8" / name).write_text("{}")
+    run.main([*args, "--low-memory"])
+    assert written == []
+    run.main(args)
+    assert len(written) == 1

@@ -71,3 +71,16 @@ def test_public_dict_redacts_secrets():
     public = s.public_dict()
     assert public["api_key"] == "***" and public["openai_api_key"] == "***"
     assert "super-secret" not in str(public) and "sk-live" not in str(public)
+
+
+def test_every_setting_has_help_text():
+    from noulo.config import SETTING_HELP
+
+    assert set(SETTING_HELP) == set(Settings.model_fields)
+    assert all(text and text[0].isupper() for text in SETTING_HELP.values())
+
+
+def test_secret_settings_are_flagged():
+    from noulo.config import SECRET_FIELDS
+
+    assert {"api_key", "openai_api_key", "memory_api_key"} <= set(SECRET_FIELDS)

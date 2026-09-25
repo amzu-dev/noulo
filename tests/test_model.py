@@ -109,3 +109,35 @@ def test_git_lfs_pointer_file_gives_actionable_error(tmp_path):
     (tmp_path / "config.json").write_text('{"id2label": {"0": "entailment", "1": "neutral"}}')
     with pytest.raises(ModelLoadError, match="git lfs pull"):
         OnnxNliModel(tmp_path)
+
+
+def _capture_session(monkeypatch):
+    import onnxruntime as ort
+
+    seen = {}
+    real = ort.InferenceSession
+
+    def fake(path, options=None, providers=None, **kwargs):
+        seen.update(kwargs)
+        return real(path, options, providers=providers, **kwargs)
+
+    monkeypatch.setattr(ort, "InferenceSession", fake)
+    return seen
+
+
+@pytest.mark.model
+def test_low_memory_mode_disables_constant_folding(monkeypatch):
+    from tests.conftest import DEFAULT_NLI_MODEL_DIR
+
+    seen = _capture_session(monkeypatch)
+    OnnxNliModel(DEFAULT_NLI_MODEL_DIR, low_memory=True).close()
+    assert seen.get("disabled_optimizers") == ["ConstantFolding"]
+
+
+@pytest.mark.model
+def test_default_mode_keeps_all_optimisations(monkeypatch):
+    from tests.conftest import DEFAULT_NLI_MODEL_DIR
+
+    seen = _capture_session(monkeypatch)
+    OnnxNliModel(DEFAULT_NLI_MODEL_DIR).close()
+    assert not seen.get("disabled_optimizers")

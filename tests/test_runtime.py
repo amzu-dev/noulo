@@ -81,3 +81,8 @@ def test_engine_passes_concurrency_settings(tmp_path):
     cfg = settings(tmp_path, max_concurrency=3, max_queue=5)
     engine = build_engine(cfg, build_registry(cfg))
     assert engine._max_concurrency == 3 and engine._max_pending == 8
+
+
+def test_low_memory_setting_reaches_the_registry(tmp_path):
+    registry = build_registry(settings(tmp_path, low_memory=True))
+    assert registry._low_memory is True

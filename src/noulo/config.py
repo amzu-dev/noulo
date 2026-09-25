@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     models_file: Path | None = Path("models.json")
     model: str = "nli-deberta-v3-xsmall-int8"
     threads: int | None = None
+    low_memory: bool = False
     openai_base_url: str | None = None
     openai_model: str | None = None
     openai_api_key: SecretStr | None = None
@@ -122,3 +123,49 @@ class Settings(BaseSettings):
             if data.get(name) is not None:
                 data[name] = "***"
         return data
+
+
+SETTING_HELP: dict[str, str] = {
+    "host": "Bind address; non-loopback hosts also need allow_network",
+    "port": "HTTP port of the API and frontend",
+    "allow_network": "Allow binding a non-loopback (LAN/public) interface",
+    "api_key": "Require 'Authorization: Bearer <key>' on /api/v1/*",
+    "cors_enabled": "Send CORS headers at all",
+    "cors_origins": "Extra allowed browser origins, comma-separated (never *)",
+    "cors_allow_localhost": "Allow localhost/127.0.0.1 origins on any port",
+    "ui_enabled": "Serve the frontend at /ui/",
+    "open_browser": "Open the frontend in a browser when the server starts",
+    "run_dir": "Where the background service keeps its pidfile and log",
+    "log_level": "Server log level (critical, error, warning, info, debug)",
+    "models_dir": "Directory holding local models",
+    "models_file": "JSON file with your endpoints and custom models",
+    "model": "Model loaded at startup (see /model)",
+    "threads": "ONNX Runtime intra-op threads (empty = automatic)",
+    "low_memory": "Trade some speed for ~25% less RAM (skips ONNX constant folding)",
+    "openai_base_url": "Shortcut OpenAI-compatible endpoint registered as model 'openai'",
+    "openai_model": "Model name for the 'openai' shortcut endpoint",
+    "openai_api_key": "API key for the 'openai' shortcut endpoint",
+    "max_concurrency": "Inferences allowed to run at the same time",
+    "max_queue": "Requests allowed to wait before 503 ENGINE_BUSY",
+    "shutdown_timeout": "Seconds to finish in-flight requests on stop",
+    "max_input_chars": "Maximum characters in 'input'",
+    "max_text_chars": "Maximum characters in a proposition, question, option or level",
+    "max_choices": "Maximum number of Choice options",
+    "max_rubric_levels": "Maximum number of Score rubric levels",
+    "max_body_bytes": "Maximum request body size in bytes",
+    "learning_enabled": "Remember cases and let feedback adjust future answers",
+    "embedder": "Sentence embedder used by the learning memory",
+    "memory_store": "Vector store: sqlite, qdrant, chroma or module:Class",
+    "memory_location": "File/dir for local stores or http(s):// URL for remote ones",
+    "memory_collection": "Collection name (the embedder id is appended)",
+    "memory_api_key": "API key for a remote vector database",
+    "memory_top_k": "Past cases considered per request",
+    "memory_min_similarity": "Similarity a past input needs to count (0-1)",
+    "memory_feedback_weight": "Weight of cases confirmed by feedback",
+    "memory_observed_weight": "Weight of past unverified answers (0 = feedback only)",
+    "memory_max_influence": "Upper bound on how far memory can move a result (0-1)",
+    "memory_prior_strength": "Evidence needed before memory has much influence",
+}
+
+# Settings the running server can apply without a restart (via the API).
+LIVE_SETTINGS = ("model", "learning_enabled")

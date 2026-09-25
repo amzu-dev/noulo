@@ -1,6 +1,6 @@
 # Model comparison
 
-Nine catalog models and three quantisation levels, measured with:
+Fourteen catalog models (nine basic, five larger) and four precisions (FP32, FP16, INT8, INT4), measured with:
 
 ```bash
 noulo benchmark --all --download --tune --compare benchmark/results/comparison.md
@@ -35,10 +35,40 @@ noulo benchmark --all --download --tune --compare benchmark/results/comparison.m
 | zeroshot-xtremedistil-int8 | INT8 | **12.5 MiB** | **116.5 MiB** | **0.09 s** | 62.5% | 69.0% | 0.104 | 0.251 | **1.6 ms** | **6.5 ms** |
 | **zeroshot-deberta-v3-xsmall-int8** | INT8 | 83.2 MiB | 333.4 MiB | 0.59 s | **70.0%** | 87.0% | **0.092** | 0.244 | 8.0 ms | 25.6 ms |
 
+### Larger models (0.5–1 GB downloads)
+
+| Model | Quant | Size | Peak RAM¹ | Cold start | Choice acc | Noul acc | Noul ECE | Score MAE | P50 | P95 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **zeroshot-deberta-v3-base-fp32** | FP32 | 704 MiB | 1234 MiB | 1.88 s | **85.0%** | **91.0%** | **0.078** | **0.115** | 28.5 ms | 134 ms |
+| nli-deberta-v3-base-fp32 | FP32 | 704 MiB | 1419 MiB | 1.66 s | 70.0% | 89.0% | 0.101 | 0.175 | 30.1 ms | 146 ms |
+| nli-bart-large-fp16 | FP16 | 778 MiB | 2010 MiB | 3.40 s | 70.0% | 91.0% | 0.095 | 0.205 | 182 ms | 565 ms |
+| nli-deberta-v3-large-int8 *(experimental)* | INT8 | 613 MiB | 1001 MiB | 2.45 s | 65.0% | 77.0% | 0.089 | 0.227 | 47.4 ms | 208 ms |
+| nli-deberta-v3-large-anli-int8 *(experimental)* | INT8 | 613 MiB | 1435 MiB | 2.99 s | 57.5% | 64.0% | 0.071 | 0.271 | 53.7 ms | 178 ms |
+
 ¹ Peak RSS of the benchmark process, which loads the model and runs every test item,
 including long inputs that grow ONNX Runtime's memory arena. A running server with the
-default model, the learning embedder and the API measured about **290 MiB RSS** (end-to-end
+default model, the learning embedder and the API measured about **500 MiB RSS** (end-to-end
 test). Ranges show two separate runs.
+
+### Server RAM
+
+The steady-state RSS of `noulo serve` after a few requests (learning memory on unless noted):
+
+| Configuration | Server RSS |
+|---|---|
+| Default model | 500 MiB |
+| Default model, learning off | 473 MiB |
+| Default model, `NOULO_LOW_MEMORY=true` | 405–414 MiB |
+| Default model, low memory, learning off | 387 MiB |
+| Fast & light (`nli-minilm2-l6-int8`) | 302 MiB |
+| Most accurate (`zeroshot-deberta-v3-base-fp32`) | 829 MiB |
+
+Where the default's ~500 MiB goes: the ONNX session takes ~290 MiB for an 87 MB file,
+because constant folding re-materialises the INT8 embedding table as FP32. The DeBERTa-v3
+tokenizer (128k-piece vocabulary) takes ~100 MiB, the learning embedder ~30–50 MiB, and
+Python with the libraries ~55 MiB. **Low-memory mode** skips constant folding: −90 MiB, but
+P50 latency goes from 7.4 ms to 20.6 ms and results shift slightly (Noul 89%, Choice 65% on
+the test split), because different kernels are fused.
 
 Latency is measured per call across all three primitives. Choice and Score score every
 candidate in one batch, so they cost more than Noul.
@@ -59,16 +89,26 @@ candidate in one batch, so they cost more than Noul.
 4. **Zero-shot-trained models are better at Choice, 3-class NLI models at Noul.** The
    2-class zero-shot DeBERTa has the best Choice accuracy and calibration. The 3-class NLI
    DeBERTa is best at Noul, because its *neutral* class maps naturally to "undetermined" (0.5).
-5. **The tiny extreme:** xtremedistil (12.5 MB, 116 MiB, 1.6 ms) is attractive for very
+5. **The best larger model is an unquantised *base*, not a quantised *large*.**
+   `zeroshot-deberta-v3-base-fp32` is the most accurate model overall: Choice 85% (+17.5
+   points over the default), Score MAE 0.115 (−44%), best-calibrated Noul. It costs about 3×
+   the RAM and latency. The DeBERTa-v3-**large** INT8 exports come out *worse* than the
+   83 MB default (Noul 77% and 64%). Dynamic INT8 quantisation evidently damages these large
+   models, so they are marked `experimental` and not offered in the menus. A large model at
+   FP16/FP32 (1.7 GB or more) would exceed the 1 GB tier.
+6. **The tiny extreme:** xtremedistil (12.5 MB, 116 MiB, 1.6 ms) is attractive for very
    constrained devices, but 69% Noul accuracy is too low for a general default.
 
-## Curated choices (`noulo model`)
+## Menu choices (`noulo model`)
 
-| # | Model | Reason |
+| Tier | Model | Reason |
 |---|---|---|
-| 1 | `nli-deberta-v3-xsmall-int8` (bundled) | Best Noul, strong everywhere, under the 100 MB target |
-| 2 | `nli-minilm2-l6-int8` | Lowest RAM with Noul ≥ 85%; fastest cold start among the accurate models |
-| 3 | `zeroshot-deberta-v3-xsmall-int8` | Best Choice accuracy and Noul calibration |
+| basic | `nli-deberta-v3-xsmall-int8` (bundled) | Best small-model Noul, strong everywhere, under the 100 MB target |
+| basic | `nli-minilm2-l6-int8` | Lowest RAM with Noul ≥ 85%; fastest cold start among the accurate models |
+| basic | `zeroshot-deberta-v3-xsmall-int8` | Best small-model Choice accuracy and Noul calibration |
+| larger | `zeroshot-deberta-v3-base-fp32` | Most accurate overall |
+| larger | `nli-deberta-v3-base-fp32` | Strong 3-class NLI (neutral = "undetermined") |
+| larger | `nli-bart-large-fp16` | The classic zero-shot model, as a reference point (FP16 is slow on CPU: 182 ms per call, 2 GB RAM) |
 
 ## Caveats
 

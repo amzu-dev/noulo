@@ -61,6 +61,14 @@ class ModelEntry(BaseModel):
     local: bool
     installed: bool
     description: str
+    tier: str | None = Field(None, description="basic (< 200 MB), large (0.5-1 GB) or experimental")
+    label: str | None = Field(None, description="Short name used in model menus")
+    sizeMB: int | None = Field(None, description="Download size of the model file")
+    ramMB: int | None = Field(None, description="Measured peak RAM while benchmarking")
+    noulAccuracy: float | None = None
+    choiceAccuracy: float | None = None
+    scoreMae: float | None = None
+    p50Ms: float | None = None
 
 
 class ModelsResponse(BaseModel):

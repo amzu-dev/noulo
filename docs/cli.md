@@ -13,7 +13,7 @@ noulo [--url URL] [--api-key KEY] [--env-file FILE] COMMAND ...
 **Exit codes:** `0` success · `1` API/service error (message on stderr) · `2` usage or
 configuration error · `3` server not reachable.
 
-Running `noulo` with no command opens the [interactive shell](#interactive-shell).
+Running `noulo` with no command opens the [interactive session](#interactive-session).
 
 ---
 
@@ -71,7 +71,7 @@ noulo evaluate [FILE|-]              # a JSON /api/v1/evaluate request
 
 | Command | |
 |---|---|
-| `noulo model` | Interactive picker: 3 curated models + "plug in your own" instructions |
+| `noulo model` | Picker: 3 basic models, 3 larger (0.5-1 GB) models, your registered models, and "plug in your own" instructions. Each row shows download size, quantisation, measured RAM and accuracy |
 | `noulo model list` | All known models (`*` = active), install state |
 | `noulo model use ID` | Download if needed → save `NOULO_MODEL` → restart the managed service (or switch a manually started server live) |
 | `noulo model download [ID ...] [--missing]` | Download catalog models (default: current model + embedder) |
@@ -147,19 +147,70 @@ Each model is measured in a fresh subprocess, so peak RAM and cold start are rea
 
 ---
 
-## Interactive shell
+## Interactive session
 
-`noulo` with no command starts a shell. Slash commands map onto the CLI:
+Run `noulo` with no command. You get a Claude Code-style session: a status banner, an input
+line with history (↑/↓, saved to `~/.noulo/history`), a completion menu that appears as soon
+as you type `/`, and a status bar at the bottom.
 
 ```text
-/model                 choose a model (3 curated options or plug in your own)
-/model use <id>        switch model (downloads and restarts if needed)
-/start  /stop  /restart  /status  /logs
-/noul                  prompts for input and proposition
-/choice                prompts for input, question and "A=Billing, B=Sales"
-/score                 prompts for input, question and "low, medium, high"
-/learning on|off|status|records|clear --yes
-/feedback <recordId> <expected>
-/info  /health  /config show|get|set|unset
-/help  /quit
+╭─ ✻ noulo 0.1.0 - local decision engine ───────╮
+│  server    ● ready  http://127.0.0.1:8787     │
+│  model     nli-deberta-v3-xsmall-int8 (INT8)  │
+│  learning  on                                 │
+╰───────────────────────────────────────────────╯
+❯ /noul The customer has an overdue payment.
+  Noul mode - every line you type is checked against: “The customer has an overdue payment.”
+noul ❯ The invoice has been unpaid for 120 days.
+  ● Yes       0.95  ━━━━━━━━━━━━━━━━━━━━━━━─
+  57 ms · nli-deberta-v3-xsmall-int8
+noul ❯ /choice Which department should handle this?
+  Options (A=Billing, B=Sales - or just Billing, Sales): A=Billing, B=Technical Support, C=Sales
+choice ❯ I was charged twice for my subscription.
+  → A  Billing
+choice ❯ /good
+  ✔ Thanks - remembered as correct. Similar inputs will lean this way.
+```
+
+If the server isn't running, the session offers to start it.
+
+**Simple requests.** Anything that doesn't start with `/` is evaluated as the input for the
+current mode. With no mode yet, you're asked what to check (Noul, Choice or Score) and for
+the proposition, question, options or rubric. The mode then sticks, so you can keep typing
+inputs.
+
+**Slash commands**
+
+| Group | Command | |
+|---|---|---|
+| Decide | `/noul [proposition]` | Check whether a statement is true for each input |
+| | `/choice [question]` | Pick one of your options for each input (asks for `A=Billing, B=Sales` or `Billing, Sales`) |
+| | `/score [question]` | Place each input on a rubric (asks for `low, medium, high`) |
+| | `/context` | Show the current mode and its question, options or rubric |
+| | `/proposition`, `/question`, `/options`, `/rubric` | Change one part of the current mode |
+| Teach | `/good` · `/bad` | The last answer was right or wrong (`/bad` asks for the right option or level) |
+| | `/correct <answer>` | Give the right answer: `true`/`false`/`0.8`, an option id or text, or a level name |
+| | `/learning [on\|off]` | Show or switch learning (applied live and saved) |
+| | `/memory [clear]` | Show or clear remembered cases |
+| Configure | `/model` | Arrow-key model picker with size, quantisation, measured RAM and accuracy per model |
+| | `/model <id>` · `/model list` | Switch directly · list everything |
+| | `/config` | Interactive settings editor: pick a setting with ↑/↓, type the new value |
+| | `/config show` · `get <key>` · `set <key> <value>` · `unset <key>` | Direct forms (validated; secrets are masked) |
+| Service | `/status` · `/start` · `/stop` · `/restart` · `/logs` · `/open` | Manage the background service; `/open` opens the frontend |
+| View | `/verbose` | Show probability bars, the raw Noul value and learning influence |
+| | `/json` | Print raw JSON responses (including `recordId`) |
+| | `/clear` · `/help` · `/exit` | |
+
+After `/config set` or `/config`, noulo offers to restart the service so the change takes
+effect. `model` and `learning_enabled` apply live without a restart.
+
+**Keys:** `Tab` moves through the completion menu (`Enter` takes the highlighted one), `↑/↓` browse history, `Ctrl+C` clears the line,
+`Ctrl+D` or `/exit` quits. In menus: `↑/↓` or `j/k` move, `1`-`9` jump, `Enter` selects,
+`Esc` cancels.
+
+**Scripting:** when stdin isn't a terminal, the session reads one line at a time, so you
+can pipe a script:
+
+```bash
+printf '/noul The customer is unhappy.\nMy order never arrived.\nThanks, all good!\n' | noulo
 ```

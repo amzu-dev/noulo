@@ -355,3 +355,12 @@ def test_openapi_document_is_valid_and_complete():
         assert name in schemas, name
     noul_body = spec["paths"]["/api/v1/noul"]["post"]["requestBody"]["content"]["application/json"]
     assert noul_body["schema"] == {"$ref": "#/components/schemas/NoulRequest"}
+
+
+def test_models_listing_includes_size_quantisation_tier_and_ram(tmp_path):
+    with running(tmp_path=tmp_path) as client:
+        models = {m["id"]: m for m in client.get("/api/v1/models").json()["models"]}
+    default = models["nli-deberta-v3-xsmall-int8"]
+    assert default["sizeMB"] == 87 and default["quantization"] == "INT8"
+    assert default["tier"] == "basic" and default["ramMB"] > 0
+    assert any(m.get("tier") == "large" for m in models.values())

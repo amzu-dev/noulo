@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-  Any application ──HTTP──┐        CLI / shell ──HTTP──┐       Python code
+  Any application ──HTTP──┐        CLI / session ─HTTP─┐       Python code
   Frontend (/ui) ──HTTP───┤                            │            │
                           v                            v            v
                  ┌──────────────── FastAPI app (api/) ─────────┐  noulo.evaluate()
@@ -86,7 +86,7 @@ the timeout.
 | Decision | Reason |
 |---|---|
 | Encoder NLI models, not a generative LLM | Deterministic, calibratable probabilities; 80 MB instead of GBs; ~8 ms per call on CPU |
-| ONNX Runtime + `tokenizers`, no PyTorch | Keeps RAM near 300 MiB and installs fast on every OS/arch |
+| ONNX Runtime + `tokenizers`, no PyTorch | Keeps a running server at ~300–500 MiB (model-dependent) and installs fast on every OS/arch |
 | INT8 dynamic quantisation | Best measured size/speed/accuracy balance (see [model-comparison.md](model-comparison.md)) |
 | Calibration as a separate JSON layer | Can be refitted or replaced without touching the model |
 | Logprobs for remote LLMs | Honours "never ask a generative model for a number" while still supporting them |

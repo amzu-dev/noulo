@@ -42,6 +42,10 @@ class CatalogEntry:
     onnx_file: str | dict[str, str]  # a path, or {"arm64": path, "x86_64": path}
     quantization: str
     description: str
+    size_mb: int  # download size of the ONNX file (Hugging Face listing)
+    # "basic" (< 200 MB) | "large" (0.5-1 GB) | "experimental" (installable, not offered in menus)
+    tier: str = "basic"
+    label: str | None = None  # short name shown in model menus
     profile: dict[str, Any] = field(default_factory=dict)
 
     def onnx_path(self) -> str:
@@ -51,7 +55,10 @@ class CatalogEntry:
         return self.onnx_file[arch]
 
 
+_ARCH_INT8 = {"arm64": "onnx/model_qint8_arm64.onnx", "x86_64": "onnx/model_quint8_avx2.onnx"}
+
 CATALOG: tuple[CatalogEntry, ...] = (
+    # --- basic: small and fast
     CatalogEntry(
         "nli-deberta-v3-xsmall-int8",
         "nli",
@@ -59,6 +66,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "DeBERTa-v3-xsmall NLI (3-class), default",
+        87,
     ),
     CatalogEntry(
         "nli-deberta-v3-xsmall-fp16",
@@ -67,6 +75,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_fp16.onnx",
         "FP16",
         "DeBERTa-v3-xsmall NLI, FP16 reference",
+        143,
     ),
     CatalogEntry(
         "nli-deberta-v3-xsmall-q4f16",
@@ -75,6 +84,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_q4f16.onnx",
         "INT4",
         "DeBERTa-v3-xsmall NLI, 4-bit weights",
+        121,
     ),
     CatalogEntry(
         "nli-deberta-v3-small-int8",
@@ -82,7 +92,8 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "Xenova/nli-deberta-v3-small",
         "onnx/model_quantized.onnx",
         "INT8",
-        "DeBERTa-v3-small NLI (larger, more accurate)",
+        "DeBERTa-v3-small NLI",
+        172,
     ),
     CatalogEntry(
         "nli-minilm2-l6-int8",
@@ -91,6 +102,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         {"arm64": "onnx/model_qint8_arm64.onnx", "x86_64": "onnx/model_quint8_avx2.onnx"},
         "INT8",
         "MiniLM2-L6-H768 NLI cross-encoder",
+        83,
     ),
     CatalogEntry(
         "nli-mobilebert-int8",
@@ -99,6 +111,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "MobileBERT MNLI (very small)",
+        26,
     ),
     CatalogEntry(
         "nli-distilbert-int8",
@@ -107,6 +120,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "DistilBERT MNLI",
+        68,
     ),
     CatalogEntry(
         "zeroshot-xtremedistil-int8",
@@ -115,6 +129,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "xtremedistil zero-shot (2-class, tiny)",
+        13,
     ),
     CatalogEntry(
         "zeroshot-deberta-v3-xsmall-int8",
@@ -123,7 +138,63 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "DeBERTa-v3-xsmall zero-shot (2-class)",
+        87,
     ),
+    # --- large: 0.5-1 GB downloads, more accurate, more RAM
+    CatalogEntry(
+        "nli-deberta-v3-large-int8",
+        "nli",
+        "cross-encoder/nli-deberta-v3-large",
+        _ARCH_INT8,
+        "INT8",
+        "DeBERTa-v3-large NLI, INT8 (quantisation hurts it: measured below xsmall)",
+        643,
+        tier="experimental",
+    ),
+    CatalogEntry(
+        "nli-deberta-v3-large-anli-int8",
+        "nli",
+        "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli",
+        "onnx/model_quantized.onnx",
+        "INT8",
+        "DeBERTa-v3-large MNLI/FEVER/ANLI/WANLI, INT8 (quantisation hurts it)",
+        643,
+        tier="experimental",
+    ),
+    CatalogEntry(
+        "zeroshot-deberta-v3-base-fp32",
+        "nli",
+        "MoritzLaurer/deberta-v3-base-zeroshot-v2.0",
+        "onnx/model.onnx",
+        "FP32",
+        "DeBERTa-v3-base zero-shot v2.0 (2-class, unquantised)",
+        739,
+        tier="large",
+        label="Most accurate",
+    ),
+    CatalogEntry(
+        "nli-deberta-v3-base-fp32",
+        "nli",
+        "cross-encoder/nli-deberta-v3-base",
+        "onnx/model.onnx",
+        "FP32",
+        "DeBERTa-v3-base NLI cross-encoder (unquantised)",
+        739,
+        tier="large",
+        label="Larger NLI",
+    ),
+    CatalogEntry(
+        "nli-bart-large-fp16",
+        "nli",
+        "Xenova/bart-large-mnli",
+        "onnx/model_fp16.onnx",
+        "FP16",
+        "BART-large MNLI (classic zero-shot model)",
+        816,
+        tier="large",
+        label="BART (slow)",
+    ),
+    # --- embedders
     CatalogEntry(
         "minilm-l6-v2-int8",
         "embedder",
@@ -131,6 +202,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "onnx/model_quantized.onnx",
         "INT8",
         "all-MiniLM-L6-v2 sentence embedder (learning memory)",
+        23,
     ),
 )
 _CATALOG_BY_ID = {e.id: e for e in CATALOG}
@@ -146,9 +218,7 @@ class CuratedModel:
 # Chosen from the measured comparison in docs/model-comparison.md.
 BUNDLED_MODEL = "nli-deberta-v3-xsmall-int8"
 CURATED_MODELS: tuple[CuratedModel, ...] = (
-    CuratedModel(
-        BUNDLED_MODEL, "Balanced (bundled)", "best Noul accuracy; good Choice and Score; 83 MB"
-    ),
+    CuratedModel(BUNDLED_MODEL, "Balanced ★", "best Noul accuracy; good Choice and Score; 83 MB"),
     CuratedModel(
         "nli-minilm2-l6-int8",
         "Fast & light",
@@ -162,14 +232,20 @@ CURATED_MODELS: tuple[CuratedModel, ...] = (
 )
 
 
-def _http_fetch(url: str, dest: Path) -> None:
+def _http_fetch(url: str, dest: Path, progress: Callable[[str], None] | None = None) -> None:
     import httpx
 
     with httpx.stream("GET", url, follow_redirects=True, timeout=60.0) as response:
         response.raise_for_status()
+        total = int(response.headers.get("content-length") or 0)
+        done, next_mark = 0, 10
         with dest.open("wb") as fh:
             for chunk in response.iter_bytes(1 << 20):
                 fh.write(chunk)
+                done += len(chunk)
+                while progress and total and done * 100 >= next_mark * total and next_mark <= 100:
+                    progress(f"  {dest.name}: {next_mark}% ({done / 1e6:.0f}/{total / 1e6:.0f} MB)")
+                    next_mark += 10
 
 
 def _check_base_url(base_url: str) -> str:
@@ -191,12 +267,14 @@ class ModelRegistry:
         threads: int | None = None,
         open_nli_model: Callable[..., Any] | None = None,
         profiles_dir: str | Path = PROFILES_DIR,
+        low_memory: bool = False,
     ):
         self.models_dir = Path(models_dir)
         self.models_file = Path(models_file) if models_file else None
         self._threads = threads
         self._open_nli_model = open_nli_model
         self._profiles_dir = Path(profiles_dir)
+        self._low_memory = low_memory
         self._env_openai: dict[str, Any] | None = None
         if openai_base_url and openai_model:
             self._env_openai = {
@@ -315,6 +393,10 @@ class ModelRegistry:
                 "local": True,
                 "installed": self._installed(e.id),
                 "description": e.description,
+                "tier": e.tier,
+                "label": e.label,
+                "sizeMB": e.size_mb,
+                **self._measured(e.id),
             }
             for e in CATALOG
             if e.kind == "nli"
@@ -345,6 +427,24 @@ class ModelRegistry:
                     }
                 )
         return listing
+
+    def _measured(self, model_id: str) -> dict[str, Any]:
+        """Benchmark results shipped for a model (RAM is measured, never estimated)."""
+        data: dict[str, Any] = {}
+        for source in (
+            self._profiles_dir / model_id / "measured.json",
+            self.models_dir / model_id / "measured.json",
+        ):
+            if source.exists():
+                data.update(json.loads(source.read_text()))
+        peak = data.get("peakRssBytes")
+        return {
+            "ramMB": round(peak / (1024 * 1024)) if peak else None,
+            "noulAccuracy": data.get("noulAccuracy"),
+            "choiceAccuracy": data.get("choiceAccuracy"),
+            "scoreMae": data.get("scoreMae"),
+            "p50Ms": data.get("p50Ms"),
+        }
 
     @staticmethod
     def _installed_path(path: Path) -> bool:
@@ -380,7 +480,7 @@ class ModelRegistry:
             from .inference.model import OnnxNliModel
 
             opener = OnnxNliModel
-        model = opener(model_dir, threads=self._threads)
+        model = opener(model_dir, threads=self._threads, low_memory=self._low_memory)
         return NliBackend(model, model_id=model_id, quantization=quantization, **profile)
 
     def load_backend(self, model_id: str) -> DecisionBackend:
@@ -467,7 +567,11 @@ class ModelRegistry:
             for local_name, remote_path in sources.items():
                 if progress:
                     progress(f"Downloading {entry.repo}/{remote_path}")
-                fetch(f"{HF_BASE}/{entry.repo}/resolve/main/{remote_path}", staging / local_name)
+                url = f"{HF_BASE}/{entry.repo}/resolve/main/{remote_path}"
+                if fetch is _http_fetch:
+                    fetch(url, staging / local_name, progress)
+                else:
+                    fetch(url, staging / local_name)
             onnx_bytes = (staging / "model.onnx").read_bytes()
             manifest = {
                 "id": entry.id,

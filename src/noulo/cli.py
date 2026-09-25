@@ -1,6 +1,6 @@
 """`noulo` command line: configure, run the service, call the API.
 
-    noulo                            # interactive shell (/model, /noul, /learning, ...)
+    noulo                            # interactive session (type inputs, /commands)
     noulo start [--headless]         # background service + frontend at /ui/
     noulo stop | restart | status | logs
     noulo serve                      # foreground, headless (systemd/containers)
@@ -629,28 +629,29 @@ class Cli:
         return EXIT_OK
 
     def pick_model(self) -> int:
-        from .registry import CURATED_MODELS
+        from .model_menu import OWN_MODEL, menu_items
 
-        registry = self.registry()
-        current = self.settings().model
-        self.print(f"Current model: {current}\n")
-        self.print("Choose a model:")
-        for number, m in enumerate(CURATED_MODELS, 1):
-            state = "installed" if registry.is_installed(m.id) else "downloads when selected"
-            mark = "  <- current" if m.id == current else ""
-            self.print(f"  {number}) {m.label:20s} {m.id:34s} [{state}]{mark}")
-            self.print(f"     {m.summary}")
-        self.print("  4) Plug in your own model (OpenAI-compatible endpoint or ONNX)")
-        answer = self.ask("Select 1-4 (Enter keeps the current model): ").strip()
+        try:
+            data, _ = self.api().call("GET", "/api/v1/models")
+            active, listing = data["active"], data["models"]
+        except CliError:
+            active, listing = self.settings().model, self.registry().list()
+        items = menu_items(listing, active)
+        self.print(f"Current model: {active}\n")
+        self.print("Choose a model (✓ installed · ↓ downloads when selected):")
+        for number, (_, label, facts) in enumerate(items, 1):
+            self.print(f"  {number:>2}) {label} {facts}")
+        answer = self.ask(f"Select 1-{len(items)} (Enter keeps the current model): ").strip()
         if not answer:
-            self.print(f"Keeping {current}.")
+            self.print(f"Keeping {active}.")
             return EXIT_OK
-        if answer == "4":
+        if not answer.isdigit() or not 1 <= int(answer) <= len(items):
+            raise CliError(f"Please choose 1-{len(items)}.")
+        choice = items[int(answer) - 1][0]
+        if choice == OWN_MODEL:
             self.print(PLUGIN_GUIDE)
             return EXIT_OK
-        if answer not in {"1", "2", "3"}:
-            raise CliError("Please choose 1-4.")
-        return self.use_model(CURATED_MODELS[int(answer) - 1].id, interactive=True)
+        return self.use_model(choice, interactive=True)
 
     def use_model(self, model_id: str, *, interactive: bool = False) -> int:
         """Download if needed, save as default, then restart/switch the running service."""
@@ -878,19 +879,16 @@ def main(
     )
 
     if args.command is None:
-        from .shell import Shell
+        from .repl import app
 
-        prefix = [
-            flag
-            for pair in (("--url", args.url), ("--api-key", args.api_key))
-            if pair[1]
-            for flag in pair
-        ]
-        return Shell(
-            dispatch=lambda sub_argv: main([*prefix, *sub_argv], env_file=env_path, **injected),
-            ask=ask,
+        return app.run_repl(
+            env_file=env_path,
+            url=args.url,
+            api_key=args.api_key,
+            stdin=stdin,
             stdout=stdout,
-        ).loop()
+            http_client=http_client,
+        )
 
     cli = Cli(args, env_file=env_path, **injected)
     try:

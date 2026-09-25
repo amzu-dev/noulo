@@ -23,6 +23,38 @@ from typing import Any
 from .data import DEFAULT_DATA_DIR, load_dataset
 from .report import format_comparison, format_report
 
+MEASURED_KEYS = (
+    "modelSizeBytes",
+    "peakRssBytes",
+    "coldStartMs",
+    "noulAccuracy",
+    "noulEce",
+    "choiceAccuracy",
+    "scoreMae",
+    "p50Ms",
+    "p95Ms",
+)
+
+
+def machine_name() -> str:
+    import platform
+
+    if sys.platform == "darwin":
+        brand = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True
+        ).stdout.strip()
+        if brand:
+            return brand
+    return platform.processor() or platform.machine()
+
+
+def write_measured(model_dir: Path, result: dict[str, Any], *, machine: str) -> None:
+    """Persist the numbers the model pickers show (size, RAM, accuracy, latency)."""
+    model_dir.mkdir(parents=True, exist_ok=True)
+    data = {key: result[key] for key in MEASURED_KEYS if key in result}
+    data["machine"] = machine
+    (model_dir / "measured.json").write_text(json.dumps(data, indent=2) + "\n")
+
 
 def _peak_rss_bytes() -> int:
     try:
@@ -37,7 +69,12 @@ def _peak_rss_bytes() -> int:
 
 
 def measure(
-    model_id: str, models_dir: Path, models_file: Path | None, data_dir: Path, split: str = "test"
+    model_id: str,
+    models_dir: Path,
+    models_file: Path | None,
+    data_dir: Path,
+    split: str = "test",
+    low_memory: bool = False,
 ) -> dict[str, Any]:
     """Load one model in this process and evaluate it; returns measured metrics."""
     t_process = time.perf_counter()
@@ -52,7 +89,9 @@ def measure(
         percentile_ms,
     )
 
-    settings = Settings(_env_file=None, models_dir=models_dir, models_file=models_file)
+    settings = Settings(
+        _env_file=None, models_dir=models_dir, models_file=models_file, low_memory=low_memory
+    )
     registry = build_registry(settings)
     engine = DecisionEngine(
         load_backend=registry.load_backend,
@@ -144,6 +183,8 @@ def _run_worker(model_id: str, args: argparse.Namespace) -> dict[str, Any]:
     ]
     if args.models_file:
         cmd += ["--models-file", str(args.models_file)]
+    if args.low_memory:
+        cmd.append("--low-memory")
     env = {**os.environ, "PYTHONWARNINGS": "ignore"}
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
@@ -194,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models-file", type=Path, default=None)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument("--split", default="test", choices=["test", "calibration"])
+    parser.add_argument("--low-memory", action="store_true", help="measure with NOULO_LOW_MEMORY")
     parser.add_argument("--out", type=Path, default=Path("benchmark/results"))
     parser.add_argument("--compare", type=Path, help="write a markdown comparison table here")
     parser.add_argument("--worker", help=argparse.SUPPRESS)
@@ -202,7 +244,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.worker:
         print(
             json.dumps(
-                measure(args.worker, args.models_dir, args.models_file, args.data_dir, args.split)
+                measure(
+                    args.worker,
+                    args.models_dir,
+                    args.models_file,
+                    args.data_dir,
+                    args.split,
+                    args.low_memory,
+                )
             )
         )
         return 0
@@ -240,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(result), end="\n\n")
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / f"{model_id}.json").write_text(json.dumps(result, indent=2) + "\n")
+        if not args.low_memory:  # menus show the default configuration's numbers
+            write_measured(Path(args.models_dir) / model_id, result, machine=machine_name())
 
     if args.compare:
         args.compare.parent.mkdir(parents=True, exist_ok=True)

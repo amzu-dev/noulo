@@ -317,3 +317,81 @@ def test_is_installed_covers_catalog_embedders(registry, tmp_path):
     assert not registry.is_installed("minilm-l6-v2-int8")
     install_fake(tmp_path / "models", "minilm-l6-v2-int8")
     assert registry.is_installed("minilm-l6-v2-int8")
+
+
+# ---------------------------------------------------------------- tiers, size, RAM
+
+
+def test_catalog_has_larger_tier_between_half_and_one_gigabyte():
+    large = [e for e in CATALOG if e.kind == "nli" and e.tier == "large"]
+    assert len(large) >= 3
+    assert all(500 <= e.size_mb <= 1024 for e in large)
+
+
+def test_listing_reports_size_quantisation_tier_and_measured_ram(tmp_path):
+    profiles = tmp_path / "profiles"
+    (profiles / "nli-mobilebert-int8").mkdir(parents=True)
+    (profiles / "nli-mobilebert-int8" / "measured.json").write_text(
+        json.dumps({"peakRssBytes": 150 * 1024 * 1024, "noulAccuracy": 0.84})
+    )
+    registry = ModelRegistry(tmp_path / "models", None, profiles_dir=profiles)
+    entry = {m["id"]: m for m in registry.list()}["nli-mobilebert-int8"]
+    assert entry["sizeMB"] == 26 and entry["quantization"] == "INT8" and entry["tier"] == "basic"
+    assert entry["ramMB"] == 150 and entry["noulAccuracy"] == 0.84
+    unmeasured = {m["id"]: m for m in registry.list()}["nli-distilbert-int8"]
+    assert unmeasured["ramMB"] is None
+
+
+def test_quantisation_damaged_large_models_are_not_offered_in_menus():
+    tiers = {e.id: e.tier for e in CATALOG}
+    assert tiers["nli-deberta-v3-large-int8"] == "experimental"
+    assert tiers["nli-deberta-v3-large-anli-int8"] == "experimental"
+    assert tiers["zeroshot-deberta-v3-base-fp32"] == "large"
+
+
+def test_catalog_entries_can_carry_a_menu_label(registry):
+    entry = {m["id"]: m for m in registry.list()}["zeroshot-deberta-v3-base-fp32"]
+    assert entry["label"] == "Most accurate"
+
+
+def test_http_fetch_reports_download_progress(tmp_path, monkeypatch):
+    import contextlib
+
+    import httpx
+
+    from noulo.registry import _http_fetch
+
+    class FakeResponse:
+        headers = {"content-length": str(10 * 1024 * 1024)}
+
+        def raise_for_status(self):
+            pass
+
+        def iter_bytes(self, size):
+            for _ in range(10):
+                yield b"x" * 1024 * 1024
+
+    @contextlib.contextmanager
+    def fake_stream(method, url, **kwargs):
+        yield FakeResponse()
+
+    monkeypatch.setattr(httpx, "stream", fake_stream)
+    messages = []
+    _http_fetch("https://example/model.onnx", tmp_path / "model.onnx", progress=messages.append)
+    assert (tmp_path / "model.onnx").stat().st_size == 10 * 1024 * 1024
+    assert messages[0].startswith("  model.onnx: 10%")
+    assert messages[-1].startswith("  model.onnx: 100%")
+    assert len(messages) == 10
+
+
+def test_registry_passes_low_memory_to_nli_models(tmp_path):
+    opened = {}
+
+    def opener(model_dir, **kwargs):
+        opened.update(kwargs)
+        return RecordingNliModel()
+
+    registry = ModelRegistry(tmp_path / "models", None, open_nli_model=opener, low_memory=True)
+    install_fake(tmp_path / "models", "nli-mobilebert-int8")
+    registry.load_backend("nli-mobilebert-int8")
+    assert opened["low_memory"] is True
