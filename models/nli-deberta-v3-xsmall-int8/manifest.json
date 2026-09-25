@@ -1,0 +1,9 @@
+{
+  "id": "nli-deberta-v3-xsmall-int8",
+  "kind": "nli",
+  "source": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall",
+  "file": "onnx/model_quantized.onnx",
+  "quantization": "INT8",
+  "sha256": "3fac2500c45c75af42c7711de0d1b93d59577456100208be0dc1f9e8811946b6",
+  "sizeBytes": 87246587
+}

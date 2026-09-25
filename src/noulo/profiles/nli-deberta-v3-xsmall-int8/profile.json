@@ -1,0 +1,9 @@
+{
+  "choice_template": "answer-is",
+  "choice_premise": "input+question",
+  "choice_method": "entailment",
+  "score_template": "question-answer",
+  "score_premise": "input",
+  "score_method": "entailment-contradiction",
+  "score_temperature": 0.5
+}

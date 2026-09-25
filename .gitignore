@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+dist/
+build/
+
+# runtime state (learning memory, pidfile, logs)
+/data/
+benchmark/results/
+
+# downloaded models; the bundled default + embedder ship with the repo (Git LFS)
+/models/*
+!/models/README.md
+!/models/nli-deberta-v3-xsmall-int8/
+!/models/minilm-l6-v2-int8/
+/models/*/profile.json
+/models/*/calibration.json
