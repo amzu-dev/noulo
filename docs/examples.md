@@ -115,9 +115,18 @@ choice ❯ The customer says their subscription payment was taken twice.
   → A  Billing
 choice ❯ /verbose
 choice ❯ My app crashes every time I open settings.
-  → B  Technical Support
-    A Billing            ...
+  → A  Billing
+    A Billing                    ━━━━━━━━━━────────────── 0.43
+    B Technical Support          ━━━━━━━━──────────────── 0.32
+    C Sales                      ━━━━━━────────────────── 0.25
+choice ❯ /correct B
+  ✔ Thanks - remembered as 'B'. Similar inputs will lean this way.
 ```
+
+That second answer is wrong, and the probabilities show it: 0.43 / 0.32 / 0.25 is a model
+that isn't sure. Low, spread-out probabilities are the moment to teach it: `/correct B`
+stores the right answer, and similar inputs lean towards it from then on (see
+[learning.md](learning.md)).
 
 **CLI**
 

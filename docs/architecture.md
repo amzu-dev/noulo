@@ -1,25 +1,43 @@
 # Architecture
 
+**Ways in.** Every interface ends up in the same engine:
+
+```mermaid
+flowchart LR
+  accTitle: Ways into noulo
+  accDescr: Applications, the web frontend and the CLI call the FastAPI app over HTTP; Python code calls the DecisionEngine in-process. Both paths reach the same engine.
+
+  APP["Any application"] -- HTTP --> API
+  UI["Web frontend /ui"] -- HTTP --> API
+  CLI["noulo CLI and session"] -- HTTP --> API
+  API["FastAPI app<br/>auth · CORS · limits<br/>validation · errors"] --> ENG
+  PY["Python<br/>noulo.evaluate()"] -- in-process --> ENG
+  ENG["DecisionEngine<br/>lifecycle · concurrency<br/>switching · invariants"]
+
+  classDef core fill:#282b23,stroke:#282b23,color:#f1f1e8
+  class ENG core
 ```
-  Any application ──HTTP──┐        CLI / session ─HTTP─┐       Python code
-  Frontend (/ui) ──HTTP───┤                            │            │
-                          v                            v            v
-                 ┌──────────────── FastAPI app (api/) ─────────┐  noulo.evaluate()
-                 │ auth · CORS · limits · validation · errors  │  (embedded.py)
-                 └───────────────────────┬─────────────────────┘        │
-                                         v                              v
-                          ┌──────── DecisionEngine (inference/engine.py) ────────┐
-                          │ lifecycle · concurrency · model switching · invariants │
-                          └───┬──────────────┬───────────────────┬────────────────┘
-                              │              │                   │
-                       calibration.py   primitives           LearningMemory (memory.py)
-                        (Noul layer)  noul/choice/score        │            │
-                              │              │               Embedder     VectorStore
-                              v              v              (embedder.py) (stores/: sqlite,
-                          DecisionBackend (types.py)                       qdrant, chroma, custom)
-                           ├─ NliBackend ── OnnxNliModel (ONNX Runtime + tokenizers, CPU)
-                           ├─ LlmBackend ── OnnxCausalLM (4-bit Qwen/Gemma/LFM2, one forward pass)
-                           └─ OpenAIBackend ── /v1/chat/completions + logprobs
+
+**Inside the engine.** Calibration, the three primitives and the learning memory are shared;
+only the decision backend changes with the model:
+
+```mermaid
+flowchart LR
+  accTitle: Inside the DecisionEngine
+  accDescr: The engine uses a calibration layer, the three primitives, a learning memory with an embedder and a vector store, and one decision backend: local NLI, local 4-bit LLM or an OpenAI-compatible endpoint.
+
+  ENG["DecisionEngine"] --> CAL["Calibration<br/>Noul only"]
+  ENG --> PRIM["Primitives<br/>noul · choice · score"]
+  ENG --> MEM["LearningMemory"]
+  ENG --> BE{{"DecisionBackend"}}
+  MEM --> EMB["Embedder"]
+  MEM --> VS[("VectorStore<br/>sqlite · qdrant<br/>chroma · custom")]
+  BE --> NLI["NliBackend<br/>OnnxNliModel · CPU"]
+  BE --> LLM["LlmBackend<br/>OnnxCausalLM · 4-bit LLMs"]
+  BE --> OAI["OpenAIBackend<br/>chat completions + logprobs"]
+
+  classDef core fill:#282b23,stroke:#282b23,color:#f1f1e8
+  class ENG core
 ```
 
 **One inference implementation.** The REST API, CLI, frontend and Python module all end up
@@ -27,6 +45,26 @@ in `DecisionEngine.evaluate()`, and the REST API and Python module share the sam
 validation (`api/validation.py`). There is no second code path to drift.
 
 ## Request pipeline
+
+```mermaid
+flowchart TB
+  accTitle: Request pipeline
+  accDescr: A request is validated, gets a slot, is scored by the backend, calibrated, optionally blended with the learning memory, reduced to the primitive, checked against the invariants and recorded.
+
+  V["1 · Validate<br/>schemas and limits"] --> S["2 · Acquire a slot<br/>bounded concurrency and queue"]
+  S --> B["3 · Backend<br/>raw probabilities"]
+  B --> C["4 · Calibrate<br/>Noul only"]
+  C --> L["5 · Learn<br/>blend similar past cases"]
+  L --> R["6 · Reduce<br/>a supplied ID or a 0–1 value"]
+  R --> G["7 · Guard invariants"]
+  G --> OUT(["Strict answer"])
+  G -.-> REC[("8 · Record the case")]
+  S -. queue full .-> BUSY["503 ENGINE_BUSY"]
+  G -. invalid output .-> ERR["500 / 502, never returned"]
+
+  classDef core fill:#282b23,stroke:#282b23,color:#f1f1e8
+  class OUT core
+```
 
 1. **Validate** (`parse_request`): Pydantic schemas plus stable, human-readable messages and
    configurable limits. The same schemas generate the OpenAPI document.
@@ -56,6 +94,23 @@ premise mode, method and Score temperature are per-model, tuned data (`profile.j
 
 ## Lifecycle
 
+```mermaid
+stateDiagram-v2
+  accTitle: Engine lifecycle
+  accDescr: The engine loads the model once and passes a readiness check before serving. A model switch loads the new model while the old one keeps serving. On shutdown it drains in-flight requests before releasing the model.
+
+  [*] --> created
+  created --> starting: start()
+  starting --> ready: model loaded and checked
+  starting --> failed: ModelLoadError
+  ready --> switching: switch model
+  switching --> ready: new model live
+  ready --> stopping: noulo stop or SIGTERM
+  stopping --> stopped: in-flight done or timeout
+  stopped --> [*]
+  failed --> [*]
+```
+
 **Startup** (uvicorn lifespan, before the socket is bound):
 1. build the registry and engine from settings
 2. load the model once (`ModelLoadError` → the process exits with a clear message)
@@ -74,6 +129,27 @@ premise mode, method and Score temperature are per-model, tuned data (`profile.j
 **Model switch** (`PUT /api/v1/models/active`): the new model is loaded and warmed up
 while the old one keeps serving. The swap is atomic, and the old backend is closed only once
 its last in-flight request finishes. If loading fails, the old model stays active.
+
+```mermaid
+sequenceDiagram
+  accTitle: Switching models at runtime
+  accDescr: The new model loads and passes a readiness check while the current model keeps serving; after an atomic swap the old model is closed once its last request finishes.
+
+  participant C as Client
+  participant E as DecisionEngine
+  participant O as Current model
+  participant N as New model
+
+  C->>E: PUT /api/v1/models/active
+  E->>N: load and readiness check
+  Note over O: keeps serving requests meanwhile
+  N-->>E: ready
+  E->>E: atomic swap
+  E-->>C: 200 active model
+  O-->>E: last in-flight request finishes
+  E->>O: close()
+  Note over E,N: if loading fails, the current model stays active
+```
 
 ## Background service
 

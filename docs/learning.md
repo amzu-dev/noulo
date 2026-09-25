@@ -33,6 +33,26 @@ panel in the frontend. Delete everything with `noulo learning clear --yes`.
 
 ## How memory changes an answer
 
+```mermaid
+flowchart TB
+  accTitle: How learning changes an answer
+  accDescr: Similar past cases for the same task are recalled, weighted by similarity and whether they were verified, and blended into the model's answer with a capped influence; every case is recorded and feedback marks it as verified.
+
+  Q["New request"] --> T{"Same task seen before?"}
+  T -- no --> A["Model answer as is"]
+  T -- yes --> R["Recall up to 8 similar<br/>past inputs<br/>similarity ≥ 0.80"]
+  R --> W["Weight each case<br/>verified 1.0<br/>observed 0.25"]
+  W --> I["Influence<br/>α = 0.9 · W / (W + 0.5)"]
+  I --> B["Blend<br/>(1 − α) · model<br/>+ α · memory"]
+  A --> ANS(["Answer"])
+  B --> ANS
+  ANS --> REC[("Record the case")]
+  FB["Feedback<br/>/good · /bad · /correct<br/>POST /api/v1/feedback"] --> REC
+
+  classDef core fill:#282b23,stroke:#282b23,color:#f1f1e8
+  class ANS core
+```
+
 For a new request, noulo:
 
 1. **Retrieves** up to `top_k` (8) past records with the same primitive and task key whose

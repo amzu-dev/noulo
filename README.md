@@ -14,6 +14,20 @@ model (83 MB, INT8) with ONNX Runtime on the CPU and needs no GPU or cloud. It
 exposes the same engine through a versioned REST API, a CLI, a Python module and a
 local web frontend.
 
+```mermaid
+flowchart LR
+  accTitle: How noulo answers
+  accDescr: Your text and the question go through one model that scores and never writes, a calibration layer and an optional learning memory, and come out as one strict answer.
+
+  IN["Your text<br/>+ proposition, options or rubric"] --> M["One model<br/>scores, never writes"]
+  M --> CAL["Calibration"]
+  CAL --> MEM["Memory<br/>optional"]
+  MEM --> OUT(["One strict answer<br/>0.96 · A · 0.77"])
+
+  classDef core fill:#282b23,stroke:#282b23,color:#f1f1e8
+  class M core
+```
+
 ```bash
 $ noulo noul -i "The invoice has remained unpaid for 120 days." -p "The customer has an overdue payment."
 0.968
