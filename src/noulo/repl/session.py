@@ -396,6 +396,11 @@ class ReplSession:
 
     # ------------------------------------------------------------------ learning
 
+    def cmd_teach(self, rest: str) -> None:
+        path = rest or self._ask("File of labelled examples (.jsonl)")
+        if path:
+            self.run_cli(["teach", path])
+
     def cmd_learning(self, rest: str) -> None:
         if rest in ("on", "off"):
             self.run_cli(["learning", rest])

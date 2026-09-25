@@ -96,3 +96,36 @@ def test_module_level_evaluate_uses_one_lazily_loaded_default(monkeypatch):
     assert asyncio.run(noulo.aevaluate(NOUL))["type"] == "noul"
     assert len(created) == 1
     noulo.close()
+
+
+def test_teach_file_in_process(tmp_path):
+    import json
+
+    from noulo.inference.embedder import HashingEmbedder
+    from noulo.inference.memory import LearningMemory
+    from noulo.inference.stores import open_store
+
+    engine = DecisionEngine(
+        load_backend=FakeLoader(**{"fake-model": FakeBackend(noul_value=0.9)}),
+        model_id="fake-model",
+        learning=True,
+        open_memory=lambda: LearningMemory(
+            open_store("sqlite", location=":memory:"), HashingEmbedder()
+        ),
+    )
+    path = tmp_path / "teach.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps(item)
+            for item in (
+                {**NOUL, "expected": False},
+                {"type": "noul", "input": "x", "expected": True},
+            )
+        )
+        + "\n"
+    )
+    with Noulo(engine=engine) as n:
+        result = n.teach_file(path)
+        assert result["imported"] == 1
+        assert result["failed"] == [{"line": 2, "message": "Noul requires a proposition."}]
+        assert n.noul(NOUL["input"], NOUL["proposition"]) < 0.5

@@ -88,3 +88,8 @@ def test_secret_settings_are_flagged():
 
 def test_device_defaults_to_auto():
     assert make().device == "auto"
+
+
+def test_empty_models_file_means_no_models_file(monkeypatch):
+    monkeypatch.setenv("NOULO_MODELS_FILE", "")
+    assert Settings(_env_file=None).models_file is None

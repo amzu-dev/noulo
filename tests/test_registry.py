@@ -535,3 +535,8 @@ def test_download_replaces_lfs_pointers_with_real_weights(registry, tmp_path):
     registry.download("nli-mobilebert-int8", fetch=fake_fetch(files))
     assert registry.is_installed("nli-mobilebert-int8")
     assert (model_dir / "model.onnx").read_bytes() == b"real-weights"
+
+
+def test_models_file_pointing_at_a_directory_is_ignored_not_a_crash(tmp_path):
+    registry = ModelRegistry(tmp_path / "models", tmp_path)  # a directory, not a file
+    assert any(m["id"] == "nli-deberta-v3-xsmall-int8" for m in registry.list())

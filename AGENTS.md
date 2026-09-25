@@ -60,6 +60,11 @@ Over HTTP: `POST /api/v1/noul | /choice | /score | /evaluate` (see [docs/api.md]
 and [openapi.json](openapi.json)). In-process Python, with no server:
 `from noulo import evaluate; evaluate({"type": "noul", "input": "...", "proposition": "..."})`.
 
+To teach it labelled examples in bulk: `uv run noulo teach examples.jsonl` (JSON Lines: an
+`/evaluate` request plus `"expected"` per line; `--dry-run` only validates). Learning must be on,
+and teaching affects the same task (same proposition, question and options, or rubric) only.
+See [docs/learning.md](docs/learning.md#teach-from-a-file).
+
 **Exit codes:** `0` ok · `1` API/service error (message on stderr) · `2` usage/config error ·
 `3` server not reachable (start it). Errors from the API are always
 `{"error": {"code": "...", "message": "..."}}`.

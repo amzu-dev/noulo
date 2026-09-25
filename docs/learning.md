@@ -96,6 +96,55 @@ Two ways to send it:
 - **By full request** (teach without evaluating first; good for seeding known cases):
   `POST /api/v1/feedback {"request": {"type": "noul", ...}, "expected": 1}`
 
+## Teach from a file
+
+To teach many examples at once, put them in a file: **JSON Lines** (one example per line;
+blank lines and `#` comments are skipped), or a JSON array / `{"examples": [...]}`. Each example
+is an ordinary `/api/v1/evaluate` request plus the right answer in `expected`:
+
+```jsonc
+{"type": "noul", "input": "My parcel never arrived.", "proposition": "The customer is satisfied.", "expected": false}
+{"type": "choice", "input": "My app crashes in settings.", "question": "Which department should handle this?",
+ "choices": [{"id": "A", "text": "Billing"}, {"id": "B", "text": "Technical Support"}], "expected": "B"}
+{"type": "score", "input": "A typo in the wiki footer.", "question": "How severe is this incident?",
+ "rubric": ["insignificant", "low", "medium", "high", "critical"], "expected": "insignificant"}
+```
+
+(Each example must be on a single line in a `.jsonl` file; they're wrapped above for reading.)
+
+| Primitive | `expected` |
+|---|---|
+| Noul | `true` / `false`, or a probability `0.0`–`1.0` (`0.5` = the input doesn't say) |
+| Choice | one of that example's option IDs |
+| Score | a rubric level name, or a value `0.0`–`1.0` |
+
+`type` can be left out when the fields make it obvious. The benchmark dataset format is
+accepted too, so `benchmark/data/*.jsonl` can be taught directly: `label` (`yes`/`no`/`unknown`)
+for Noul, `answer` for Choice and `expected_level` for Score.
+
+**Teaching only affects the same task:** the same proposition (Noul), the same question and
+options (Choice) or the same question and rubric (Score). Within that task, inputs similar to a
+taught example lean towards its answer (see [How memory changes an answer](#how-memory-changes-an-answer)).
+So teach with the exact questions your application asks.
+
+| Where | How |
+|---|---|
+| CLI | `noulo teach examples.jsonl` (checks the whole file first; `--dry-run` only checks) |
+| Interactive session | `/teach examples.jsonl` |
+| Frontend | **Import examples…** in the Memory panel |
+| REST API | `POST /api/v1/learning/import` `{"items": [...]}` (up to 1,000 examples per request) |
+| Python | `Noulo().teach_file("examples.jsonl")` |
+
+```text
+$ noulo teach examples/teaching.jsonl
+Taught 7 examples (choice 2, noul 3, score 2).
+```
+
+Bad examples don't stop the rest: each one is reported with its line number (for example
+`line 4: Noul requires a proposition.`), and the command exits with code 1. Learning must be on
+(`noulo learning on`). A ready-made file to try is in
+[examples/teaching.jsonl](../examples/teaching.jsonl).
+
 ## Tuning the behaviour
 
 | Goal | Setting |

@@ -342,6 +342,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = lsub.add_parser("clear", help="delete all stored cases")
     p.add_argument("--yes", action="store_true", help="do not ask for confirmation")
 
+    p = sub.add_parser("teach", help="teach noulo from a file of labelled examples (.jsonl/.json)")
+    p.add_argument(
+        "file", help="JSON Lines file (or JSON array) of examples with an `expected` answer"
+    )
+    p.add_argument("--dry-run", action="store_true", help="validate the file without teaching")
+
     p = sub.add_parser("feedback", help="teach the correct outcome for a past evaluation")
     p.add_argument("record_id", help="X-Record-Id from an evaluation")
     p.add_argument("expected", help="Choice ID, or a Noul/Score value in [0,1], or true/false")
@@ -794,6 +800,80 @@ class Cli:
             self.print(f"Deleted {data['deleted']} records.")
             return EXIT_OK
         raise CliError(f"Unknown learning action {action!r}")
+
+    def cmd_teach(self) -> int:
+        from collections import Counter
+
+        from .api.validation import RequestError, parse_request
+        from .teaching import TeachingError, batches, load_examples, to_request
+
+        try:
+            examples = load_examples(self.args.file)
+        except TeachingError as exc:
+            raise CliError(str(exc)) from None
+        limits = self.settings().limits
+        valid: list[tuple[int, dict]] = []
+        problems: list[tuple[int, str]] = []
+        for line, item in examples:
+            try:
+                request, _ = to_request(item)
+                parse_request("evaluate", request, limits)
+                valid.append((line, item))
+            except TeachingError as exc:
+                problems.append((line, str(exc)))
+            except RequestError as exc:
+                problems.append((line, exc.message))
+
+        def report_problems() -> None:
+            if problems:
+                self.err.write(f"{len(problems)} example(s) not taught:\n")
+                for line, message in sorted(problems):
+                    self.err.write(f"  line {line}: {message}\n")
+
+        if self.args.dry_run:
+            self.print(
+                f"{len(valid)} examples are valid"
+                + (f", {len(problems)} have problems." if problems else ".")
+            )
+            report_problems()
+            return EXIT_API if problems else EXIT_OK
+
+        api = self.api()
+        info, _ = api.call("GET", "/api/v1/info")
+        server_limits = info.get("limits") or {}
+        max_bytes = int(server_limits.get("maxBodyBytes", 65536) * 0.9)
+        max_items = int(server_limits.get("maxImportItems", 1000))
+        lines = [line for line, _ in valid]
+        items = [item for _, item in valid]
+        taught, kinds, offset = 0, Counter(), 0
+        for chunk in batches(items, max_bytes):
+            for start in range(0, len(chunk), max_items):
+                part = chunk[start : start + max_items]
+                try:
+                    result, _ = api.call("POST", "/api/v1/learning/import", {"items": part})
+                except ApiError as exc:
+                    if exc.api_code == "LEARNING_DISABLED":
+                        raise CliError(
+                            "Learning is off on the server; turn it on with "
+                            "`noulo learning on`, then run noulo teach again.",
+                            EXIT_API,
+                        ) from None
+                    raise
+                failed = {f["index"]: f["message"] for f in result["failed"]}
+                for index, item in enumerate(part):
+                    if index in failed:
+                        problems.append((lines[offset + index], failed[index]))
+                    else:
+                        kinds[to_request(item)[0]["type"]] += 1
+                taught += result["imported"]
+                offset += len(part)
+        detail = ", ".join(f"{kind} {count}" for kind, count in sorted(kinds.items()))
+        self.print(
+            f"Taught {taught} example{'' if taught == 1 else 's'}"
+            + (f" ({detail})." if detail else ".")
+        )
+        report_problems()
+        return EXIT_API if problems else EXIT_OK
 
     def cmd_feedback(self) -> int:
         raw = self.args.expected

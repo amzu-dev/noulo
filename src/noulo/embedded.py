@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from .api.validation import parse_request
@@ -69,6 +70,25 @@ class Noulo:
     def score(self, input: str, question: str, rubric: Sequence[str]) -> float:
         payload = {"input": input, "question": question, "rubric": list(rubric)}
         return self._run("score", payload, False)["value"]
+
+    def teach_file(self, path: str | Path) -> dict[str, Any]:
+        """Teach every labelled example in a .jsonl/.json file (see noulo.teaching)."""
+        from .api.validation import RequestError
+        from .teaching import TeachingError, load_examples, to_request
+
+        imported, failed = 0, []
+        for line, item in load_examples(path):
+            try:
+                request, expected = to_request(item)
+                self.engine.teach(
+                    parse_request("evaluate", request, self.settings.limits), expected
+                )
+                imported += 1
+            except RequestError as exc:
+                failed.append({"line": line, "message": exc.message})
+            except (TeachingError, ValueError, TypeError) as exc:
+                failed.append({"line": line, "message": str(exc)})
+        return {"imported": imported, "failed": failed}
 
     def feedback(self, record_id: str, expected: Any) -> str:
         return self.engine.feedback(record_id, expected)

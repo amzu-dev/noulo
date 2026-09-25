@@ -9,7 +9,7 @@ from __future__ import annotations
 import ipaddress
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .api.validation import Limits
@@ -107,6 +107,11 @@ class Settings(BaseSettings):
             max_choices=self.max_choices,
             max_rubric_levels=self.max_rubric_levels,
         )
+
+    @field_validator("models_file", mode="before")
+    @classmethod
+    def _empty_means_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     def check(self) -> Settings:
         if not is_loopback(self.host) and not self.allow_network:

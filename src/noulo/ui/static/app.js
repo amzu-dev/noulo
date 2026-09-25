@@ -807,6 +807,85 @@ async function clearMemory() {
   }
 }
 
+// Teach from a file: JSON Lines (one example per line) or a JSON array / {"examples": [...]}.
+// Each example is an /evaluate request plus `expected` (see docs/learning.md).
+function parseExamples(text, name) {
+  const trimmed = text.trim();
+  if (name.endsWith(".json") || trimmed.startsWith("[")) {
+    const data = JSON.parse(trimmed);
+    const items = Array.isArray(data) ? data : data && data.examples;
+    if (!Array.isArray(items)) throw new Error('Expected a JSON array or {"examples": [...]}.');
+    return items.map((item, index) => ({ line: index + 1, item }));
+  }
+  const examples = [];
+  text.split(/\r?\n/).forEach((raw, index) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    try {
+      examples.push({ line: index + 1, item: JSON.parse(line) });
+    } catch {
+      throw new Error(`Invalid JSON on line ${index + 1}.`);
+    }
+  });
+  return examples;
+}
+
+function batchesOf(examples, maxBytes = 56000) {
+  const batches = [];
+  let batch = [];
+  let size = 0;
+  for (const example of examples) {
+    const bytes = JSON.stringify(example.item).length + 2;
+    if (batch.length && (size + bytes > maxBytes || batch.length >= 1000)) {
+      batches.push(batch);
+      batch = [];
+      size = 0;
+    }
+    batch.push(example);
+    size += bytes;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
+async function importExamples(file) {
+  const result = $("#memory-import-result");
+  const button = $("#memory-import");
+  let examples;
+  try {
+    examples = parseExamples(await file.text(), file.name.toLowerCase());
+  } catch (err) {
+    showMessage(result, `${file.name}: ${err.message}`, "INVALID_FILE");
+    return;
+  }
+  if (!examples.length) {
+    showMessage(result, `${file.name} has no examples.`);
+    return;
+  }
+  button.disabled = true;
+  showMessage(result, `Teaching ${plural(examples.length, "example")}…`);
+  let taught = 0;
+  const skipped = [];
+  try {
+    for (const batch of batchesOf(examples)) {
+      const res = await api.importExamples(batch.map((e) => e.item));
+      taught += Number(res && res.imported) || 0;
+      for (const failure of (res && res.failed) || []) {
+        skipped.push(`line ${batch[failure.index].line}: ${failure.message}`);
+      }
+    }
+    toast(`Taught ${plural(taught, "example")} from ${file.name}.`, skipped.length ? "warn" : "ok");
+    showMessage(result, skipped.length
+      ? `${plural(skipped.length, "example")} not taught. ${skipped.slice(0, 3).join(" · ")}${skipped.length > 3 ? " · …" : ""}`
+      : `Taught ${plural(taught, "example")} from ${file.name}.`);
+  } catch (err) {
+    showMessage(result, err.message, err.code);
+  } finally {
+    button.disabled = false;
+    refreshLearning();
+  }
+}
+
 // ---------------------------------------------------------------- settings
 
 function syncKeyIndicator() {
@@ -877,6 +956,12 @@ function init() {
   $("#learning-toggle").addEventListener("change", toggleLearning);
   $("#memory-refresh").addEventListener("click", refreshLearning);
   $("#memory-clear").addEventListener("click", clearMemory);
+  $("#memory-import").addEventListener("click", () => $("#memory-file").click());
+  $("#memory-file").addEventListener("change", (e) => {
+    const [file] = e.target.files;
+    if (file) importExamples(file);
+    e.target.value = "";
+  });
   $("#memory-cancel").addEventListener("click", () => { armClear(false); $("#memory-clear").focus(); });
   pollHealth();
   refreshAll();

@@ -156,10 +156,14 @@
         </div>
         <ul id="memory-list" class="memory-list" tabindex="0" aria-label="Stored cases, newest first"></ul>
         <div class="memory-actions">
+          <button id="memory-import" class="btn btn-quiet" type="button"
+                  title="Teach from a .jsonl or .json file of labelled examples">Import examples…</button>
+          <input id="memory-file" type="file" accept=".jsonl,.json,application/json" hidden>
           <button id="memory-clear" class="btn btn-quiet" type="button" disabled>Clear memory</button>
           <button id="memory-cancel" class="btn-link" type="button" hidden>Cancel</button>
         </div>
         <p id="memory-message" class="panel-message" aria-live="polite"></p>
+        <p id="memory-import-result" class="panel-message" aria-live="polite"></p>
       </section>
     </aside>
   </main>

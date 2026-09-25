@@ -371,7 +371,7 @@ class ModelRegistry:
     # ------------------------------------------------------------------ user entries
 
     def _user_file(self) -> dict[str, list[dict[str, Any]]]:
-        if self.models_file is None or not self.models_file.exists():
+        if self.models_file is None or not self.models_file.is_file():
             return {"models": [], "embedders": []}
         data = json.loads(self.models_file.read_text() or "{}")
         return {

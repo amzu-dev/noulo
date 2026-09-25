@@ -30,6 +30,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("good", "", "Tell noulo the last answer was right", "Teach"),
     Command("bad", "", "Tell noulo the last answer was wrong", "Teach"),
     Command("correct", "<answer>", "Give the right answer for the last input", "Teach"),
+    Command("teach", "<file>", "Teach from a file of labelled examples (.jsonl)", "Teach"),
     Command("learning", "[on|off]", "Show or switch learning from inputs", "Teach"),
     Command("memory", "[clear]", "Show (or clear) remembered cases", "Teach"),
     Command("model", "[id|list]", "Choose a model: size, quantisation and RAM shown", "Configure"),

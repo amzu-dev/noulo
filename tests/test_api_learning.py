@@ -140,3 +140,69 @@ def test_openapi_documents_learning_endpoints():
         paths = client.get("/openapi.json").json()["paths"]
     for path in ("/api/v1/learning", "/api/v1/learning/records", "/api/v1/feedback"):
         assert path in paths
+
+
+# ---------------------------------------------------------------- import (teach from a file)
+
+
+def test_import_teaches_many_examples_at_once():
+    items = [
+        {"type": "noul", **NOUL, "expected": False},
+        {"type": "choice", **CHOICE, "expected": "B"},
+    ]
+    with running() as client:
+        response = client.post("/api/v1/learning/import", json={"items": items})
+        assert response.status_code == 200
+        assert response.json() == {"imported": 2, "failed": []}
+        assert client.post("/api/v1/noul", json=NOUL).json()["value"] < 0.5
+        assert client.post("/api/v1/choice", json=CHOICE).json()["value"] == "B"
+
+
+def test_import_reports_bad_examples_without_dropping_good_ones():
+    items = [
+        {"type": "noul", **NOUL, "expected": True},
+        {"type": "noul", "input": "x", "expected": True},
+        {"type": "choice", **CHOICE, "expected": "Z"},
+    ]
+    with running() as client:
+        body = client.post("/api/v1/learning/import", json={"items": items}).json()
+    assert body["imported"] == 1
+    assert [(f["index"], f["code"]) for f in body["failed"]] == [
+        (1, "INVALID_REQUEST"),
+        (2, "INVALID_REQUEST"),
+    ]
+    assert body["failed"][0]["message"] == "Noul requires a proposition."
+    assert "supplied" in body["failed"][1]["message"]
+
+
+def test_import_accepts_benchmark_dataset_rows():
+    row = {
+        "id": "noul-1",
+        "input": NOUL["input"],
+        "proposition": NOUL["proposition"],
+        "label": "no",
+        "split": "calibration",
+    }
+    with running() as client:
+        assert client.post("/api/v1/learning/import", json={"items": [row]}).json()["imported"] == 1
+
+
+def test_import_needs_learning_on():
+    with running(learning=False) as client:
+        response = client.post("/api/v1/learning/import", json={"items": []})
+    assert response.status_code == 409 and response.json()["error"]["code"] == "LEARNING_DISABLED"
+
+
+def test_import_rejects_oversized_batches():
+    with running() as client:
+        response = client.post(
+            "/api/v1/learning/import",
+            json={"items": [{"type": "noul", **NOUL, "expected": 1}] * 1001},
+        )
+    assert response.status_code == 422
+
+
+def test_info_exposes_request_limits_for_clients():
+    with running() as client:
+        limits = client.get("/api/v1/info").json()["limits"]
+    assert limits["maxBodyBytes"] == 65536 and limits["maxImportItems"] == 1000

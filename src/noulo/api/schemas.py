@@ -21,6 +21,18 @@ class HealthResponse(BaseModel):
     modelLoaded: bool
 
 
+MAX_IMPORT_ITEMS = 1000
+
+
+class Limits(BaseModel):
+    maxBodyBytes: int
+    maxInputChars: int
+    maxTextChars: int
+    maxChoices: int
+    maxRubricLevels: int
+    maxImportItems: int
+
+
 class InfoResponse(BaseModel):
     name: str
     version: str
@@ -33,6 +45,7 @@ class InfoResponse(BaseModel):
     device: str = Field(
         description="Where the model runs: cpu, coreml, cuda, directml, rocm, remote"
     )
+    limits: Limits = Field(description="Request limits, e.g. to size /learning/import batches")
 
 
 class NoulResponse(BaseModel):
@@ -122,6 +135,25 @@ class FeedbackRequest(BaseModel):
     expected: float | bool | str = Field(
         description="Correct outcome: Noul/Score value in [0,1] (or true/false), or a Choice ID."
     )
+
+
+class ImportRequest(BaseModel):
+    items: list[dict[str, Any]] = Field(
+        max_length=MAX_IMPORT_ITEMS,
+        description="Examples: an /evaluate request plus `expected` (or benchmark-dataset rows "
+        "with label / answer / expected_level).",
+    )
+
+
+class ImportFailure(BaseModel):
+    index: int = Field(description="Position of the example in `items` (0-based)")
+    code: str
+    message: str
+
+
+class ImportResponse(BaseModel):
+    imported: int
+    failed: list[ImportFailure]
 
 
 class FeedbackResponse(BaseModel):

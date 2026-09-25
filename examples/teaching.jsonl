@@ -1,0 +1,11 @@
+# Labelled examples for `noulo teach examples/teaching.jsonl`.
+# One JSON object per line: an /api/v1/evaluate request plus the right answer in "expected".
+# Teaching only affects the SAME task: the same proposition, the same question and options,
+# or the same question and rubric. Similar inputs for that task then lean towards these answers.
+{"type": "noul", "input": "My parcel never arrived and nobody answers my emails.", "proposition": "The customer is satisfied.", "expected": false}
+{"type": "noul", "input": "Thanks, the replacement arrived and works perfectly.", "proposition": "The customer is satisfied.", "expected": true}
+{"type": "noul", "input": "I have a question about my account.", "proposition": "The customer is satisfied.", "expected": 0.5}
+{"type": "choice", "input": "My app crashes every time I open settings.", "question": "Which department should handle this?", "choices": [{"id": "A", "text": "Billing"}, {"id": "B", "text": "Technical Support"}, {"id": "C", "text": "Sales"}], "expected": "B"}
+{"type": "choice", "input": "I'd like a quote for 50 more licences.", "question": "Which department should handle this?", "choices": [{"id": "A", "text": "Billing"}, {"id": "B", "text": "Technical Support"}, {"id": "C", "text": "Sales"}], "expected": "C"}
+{"type": "score", "input": "A typo was found in the footer of an internal wiki page.", "question": "How severe is this incident?", "rubric": ["insignificant", "low", "medium", "high", "critical"], "expected": "insignificant"}
+{"type": "score", "input": "Checkout is slow for some users in one region, but orders still go through.", "question": "How severe is this incident?", "rubric": ["insignificant", "low", "medium", "high", "critical"], "expected": "medium"}

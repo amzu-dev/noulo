@@ -87,7 +87,7 @@ of the bodies above; it is routed to the same implementation as the dedicated en
 | | Response |
 |---|---|
 | `GET /health` | `200 {"status":"ok","modelLoaded":true}` once the model has loaded and passed its readiness check; otherwise `503 {"status":"<state>","modelLoaded":false}` where state is `created`, `starting`, `stopping`, `stopped` or `failed` |
-| `GET /api/v1/info` | `{"name":"noulo","version":"0.1.0","model":"nli-deberta-v3-xsmall-int8","quantization":"INT8","capabilities":["choice","score","noul"],"backend":"onnx-nli","local":true,"learning":true}` |
+| `GET /api/v1/info` | `{"name":"noulo","version":"0.1.0","model":"nli-deberta-v3-xsmall-int8","quantization":"INT8","capabilities":["choice","score","noul"],"backend":"onnx-nli","local":true,"learning":true,"device":"cpu","limits":{"maxBodyBytes":65536,"maxInputChars":5000,"maxTextChars":1000,"maxChoices":20,"maxRubricLevels":11,"maxImportItems":1000}}` |
 
 `/health` and `/openapi.json` never require an API key.
 
@@ -112,6 +112,7 @@ or set `NOULO_MODEL`.
 | `GET /api/v1/learning/records?limit=50&offset=0&type=noul` | `{"records": [{"id","primitive","task","input","observedValue","observedChoice","verifiedValue","verifiedChoice","hits","modelId","createdAt","updatedAt"}]}` |
 | `DELETE /api/v1/learning/records` | `{"deleted": 12}` |
 | `POST /api/v1/feedback` | See below |
+| `POST /api/v1/learning/import` `{"items": [...]}` | Teach up to 1,000 labelled examples at once (an `/evaluate` request plus `expected`, or benchmark-dataset rows). Returns `{"imported": 2, "failed": [{"index": 1, "code": "INVALID_REQUEST", "message": "Noul requires a proposition."}]}`. Bad examples are reported, the rest are taught. See [learning.md](learning.md#teach-from-a-file) |
 
 **Feedback by record id** (from `X-Record-Id`):
 

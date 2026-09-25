@@ -99,6 +99,7 @@ When you choose a model in the picker:
 | `noulo learning records [--limit N] [--type noul\|choice\|score]` | Stored cases |
 | `noulo learning clear --yes` | Delete all stored cases |
 | `noulo feedback RECORD_ID EXPECTED` | Correct outcome: `true`/`false` or `0.0–1.0` for Noul/Score, an option ID for Choice |
+| `noulo teach FILE [--dry-run]` | Teach every labelled example in a `.jsonl`/`.json` file; bad lines are reported by line number (exit 1). See [learning.md](learning.md#teach-from-a-file) |
 
 ---
 
@@ -191,6 +192,7 @@ inputs.
 | | `/proposition`, `/question`, `/options`, `/rubric` | Change one part of the current mode |
 | Teach | `/good` · `/bad` | The last answer was right or wrong (`/bad` asks for the right option or level) |
 | | `/correct <answer>` | Give the right answer: `true`/`false`/`0.8`, an option id or text, or a level name |
+| | `/teach <file>` | Teach every labelled example in a `.jsonl` file |
 | | `/learning [on\|off]` | Show or switch learning (applied live and saved) |
 | | `/memory [clear]` | Show or clear remembered cases |
 | Configure | `/model` | Arrow-key model picker with size, quantisation, measured RAM and accuracy per model |

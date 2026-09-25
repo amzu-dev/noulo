@@ -270,6 +270,7 @@ the model's answer:
 noulo noul -i "My parcel never arrived." -p "The customer is satisfied." --json   # note recordId
 noulo feedback <recordId> false        # similar future inputs now lean towards "no"
 noulo learning off                     # stop recording and applying memory (live + saved)
+noulo teach examples/teaching.jsonl    # teach many labelled examples from a file
 ```
 
 Storage is pluggable: `NOULO_MEMORY_STORE=sqlite` (default), `qdrant`, `chroma`, or

@@ -113,4 +113,5 @@ export const api = {
   feedback: (recordId, expected) => call("POST", "/api/v1/feedback", { recordId, expected }),
   records: (limit = 20) => call("GET", `/api/v1/learning/records?limit=${limit}`),
   clearRecords: () => call("DELETE", "/api/v1/learning/records"),
+  importExamples: (items) => call("POST", "/api/v1/learning/import", { items }),
 };

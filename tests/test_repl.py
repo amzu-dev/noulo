@@ -386,3 +386,10 @@ def test_banner_and_toolbar_show_the_device(api, tmp_path):
     session.startup()
     assert "device" in out.getvalue() and "cpu" in out.getvalue()
     assert "cpu" in session.toolbar()
+
+
+def test_teach_command_delegates_to_cli(api, tmp_path):
+    calls = []
+    session, _ = make(api, tmp_path, cli_calls=calls)
+    session.handle("/teach examples.jsonl")
+    assert calls == [["teach", "examples.jsonl"]]

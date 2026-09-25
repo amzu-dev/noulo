@@ -1563,6 +1563,112 @@
           }
         ]
       }
+    },
+    "/api/v1/learning/import": {
+      "post": {
+        "tags": [
+          "learning"
+        ],
+        "summary": "Teach many labelled examples at once (e.g. from a file)",
+        "operationId": "import_examples_api_v1_learning_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload or input too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Inference error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream model endpoint error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Model not ready, busy or shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1756,6 +1862,70 @@
         ],
         "title": "HealthResponse"
       },
+      "ImportFailure": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "description": "Position of the example in `items` (0-based)"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "code",
+          "message"
+        ],
+        "title": "ImportFailure"
+      },
+      "ImportRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Items",
+            "description": "Examples: an /evaluate request plus `expected` (or benchmark-dataset rows with label / answer / expected_level)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ImportRequest"
+      },
+      "ImportResponse": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/ImportFailure"
+            },
+            "type": "array",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported",
+          "failed"
+        ],
+        "title": "ImportResponse"
+      },
       "InfoResponse": {
         "properties": {
           "name": {
@@ -1797,6 +1967,10 @@
             "type": "string",
             "title": "Device",
             "description": "Where the model runs: cpu, coreml, cuda, directml, rocm, remote"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits",
+            "description": "Request limits, e.g. to size /learning/import batches"
           }
         },
         "type": "object",
@@ -1809,7 +1983,8 @@
           "backend",
           "local",
           "learning",
-          "device"
+          "device",
+          "limits"
         ],
         "title": "InfoResponse"
       },
@@ -1850,6 +2025,44 @@
           "enabled"
         ],
         "title": "LearningToggle"
+      },
+      "Limits": {
+        "properties": {
+          "maxBodyBytes": {
+            "type": "integer",
+            "title": "Maxbodybytes"
+          },
+          "maxInputChars": {
+            "type": "integer",
+            "title": "Maxinputchars"
+          },
+          "maxTextChars": {
+            "type": "integer",
+            "title": "Maxtextchars"
+          },
+          "maxChoices": {
+            "type": "integer",
+            "title": "Maxchoices"
+          },
+          "maxRubricLevels": {
+            "type": "integer",
+            "title": "Maxrubriclevels"
+          },
+          "maxImportItems": {
+            "type": "integer",
+            "title": "Maximportitems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "maxBodyBytes",
+          "maxInputChars",
+          "maxTextChars",
+          "maxChoices",
+          "maxRubricLevels",
+          "maxImportItems"
+        ],
+        "title": "Limits"
       },
       "ModelEntry": {
         "properties": {

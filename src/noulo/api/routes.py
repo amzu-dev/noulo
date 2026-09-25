@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from .. import __version__
-from ..inference.engine import EngineResult
+from ..inference.engine import EngineResult, EngineUnavailable
 from ..inference.types import PRIMITIVES
 from . import schemas
 from .validation import RequestError, parse_request
@@ -75,6 +75,7 @@ async def health(request: Request):
 
 @router.get("/info", response_model=schemas.InfoResponse, tags=["health"])
 async def info(request: Request):
+    settings = request.app.state.settings
     engine = request.app.state.engine
     model = engine.model_info
     return {
@@ -87,6 +88,14 @@ async def info(request: Request):
         "local": model.local,
         "learning": engine.learning_enabled,
         "device": model.device,
+        "limits": {
+            "maxBodyBytes": settings.max_body_bytes,
+            "maxInputChars": settings.max_input_chars,
+            "maxTextChars": settings.max_text_chars,
+            "maxChoices": settings.max_choices,
+            "maxRubricLevels": settings.max_rubric_levels,
+            "maxImportItems": schemas.MAX_IMPORT_ITEMS,
+        },
     }
 
 
@@ -264,3 +273,36 @@ async def feedback(body: schemas.FeedbackRequest, request: Request):
     except ValueError as exc:
         raise RequestError(422, "INVALID_REQUEST", str(exc)) from None
     return {"recordId": record_id, "verified": True}
+
+
+def _import_examples(engine, items: list[dict[str, Any]], limits) -> dict[str, Any]:
+    from ..teaching import TeachingError, to_request
+
+    imported, failed = 0, []
+    for index, item in enumerate(items):
+        try:
+            request, expected = to_request(item)
+            engine.teach(parse_request("evaluate", request, limits), expected)
+            imported += 1
+        except RequestError as exc:
+            failed.append({"index": index, "code": exc.code, "message": exc.message})
+        except (TeachingError, ValueError, TypeError) as exc:
+            failed.append({"index": index, "code": "INVALID_REQUEST", "message": str(exc)})
+    return {"imported": imported, "failed": failed}
+
+
+@router.post(
+    "/learning/import",
+    response_model=schemas.ImportResponse,
+    tags=["learning"],
+    summary="Teach many labelled examples at once (e.g. from a file)",
+)
+async def import_examples(body: schemas.ImportRequest, request: Request):
+    engine = request.app.state.engine
+    if not engine.learning_enabled:
+        raise EngineUnavailable(
+            "LEARNING_DISABLED", "Learning is disabled; enable it to teach noulo."
+        )
+    return await run_in_threadpool(
+        _import_examples, engine, body.items, request.app.state.settings.limits
+    )

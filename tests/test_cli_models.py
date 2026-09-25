@@ -414,3 +414,72 @@ def test_start_does_not_open_a_browser_without_a_terminal(env_file):
 def test_start_opens_the_frontend_for_a_person_at_a_terminal(env_file):
     code, opened = _start(TtyOut(), env_file)
     assert code == 0 and opened == ["http://127.0.0.1:8787/ui/"]
+
+
+# ---------------------------------------------------------------- noulo teach FILE
+
+
+def _write_examples(path, *items, comment=True):
+    lines = ["# labelled examples"] if comment else []
+    path.write_text("\n".join([*lines, *(json.dumps(i) for i in items)]) + "\n")
+    return path
+
+
+GOOD_NOUL = {"type": "noul", "input": "charged twice", "proposition": "happy", "expected": False}
+GOOD_CHOICE = {
+    "type": "choice",
+    "input": "charged twice",
+    "question": "Which team?",
+    "choices": [{"id": "A", "text": "Billing"}, {"id": "B", "text": "Sales"}],
+    "expected": "B",
+}
+
+
+def test_teach_imports_a_file_and_changes_answers(learning_api, env_file, tmp_path):
+    path = _write_examples(tmp_path / "teach.jsonl", GOOD_NOUL, GOOD_CHOICE)
+    code, out, err = run(["teach", str(path)], api=learning_api, env_file=env_file)
+    assert code == 0, err
+    assert "Taught 2 examples" in out
+    assert (
+        float(
+            run(
+                ["noul", "-i", "charged twice", "-p", "happy"], api=learning_api, env_file=env_file
+            )[1]
+        )
+        < 0.5
+    )
+
+
+def test_teach_reports_bad_lines_by_number_and_exits_1(learning_api, env_file, tmp_path):
+    bad = {"type": "noul", "input": "x", "expected": True}
+    path = _write_examples(tmp_path / "teach.jsonl", GOOD_NOUL, bad)
+    code, out, err = run(["teach", str(path)], api=learning_api, env_file=env_file)
+    assert code == 1
+    assert "Taught 1 example" in out
+    assert "line 3" in err and "Noul requires a proposition." in err
+
+
+def test_teach_dry_run_validates_without_teaching(learning_api, env_file, tmp_path):
+    path = _write_examples(tmp_path / "teach.jsonl", GOOD_NOUL, GOOD_CHOICE)
+    code, out, _ = run(["teach", str(path), "--dry-run"], api=learning_api, env_file=env_file)
+    assert code == 0 and "2 examples are valid" in out
+    assert learning_api.get("/api/v1/learning").json()["stats"]["records"] == 0
+
+
+def test_teach_splits_large_files_into_batches(learning_api, env_file, tmp_path):
+    items = [dict(GOOD_NOUL, input=f"case {n} " + "x" * 400) for n in range(300)]
+    path = _write_examples(tmp_path / "big.jsonl", *items)  # ~140 KB > 64 KB body limit
+    code, out, err = run(["teach", str(path)], api=learning_api, env_file=env_file)
+    assert code == 0, err and "Taught 300 examples" in out
+
+
+def test_teach_with_learning_off_says_how_to_turn_it_on(learning_api, env_file, tmp_path):
+    learning_api.put("/api/v1/learning", json={"enabled": False})
+    path = _write_examples(tmp_path / "teach.jsonl", GOOD_NOUL)
+    code, _, err = run(["teach", str(path)], api=learning_api, env_file=env_file)
+    assert code == 1 and "noulo learning on" in err
+
+
+def test_teach_missing_file(env_file, tmp_path):
+    code, _, err = run(["teach", str(tmp_path / "nope.jsonl")], env_file=env_file)
+    assert code == 2 and "not found" in err
