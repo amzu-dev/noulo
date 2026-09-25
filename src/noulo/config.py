@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     memory_top_k: int = 8
     memory_min_similarity: float = 0.80
     memory_feedback_weight: float = 1.0
-    memory_observed_weight: float = 0.25
+    memory_observed_weight: float = 0.0
     memory_max_influence: float = 0.9
     memory_prior_strength: float = 0.5
 

@@ -1,6 +1,6 @@
 {
   "choice_template": "answer-is",
-  "choice_premise": "input+question",
+  "choice_premise": "input",
   "choice_method": "entailment",
   "score_template": "question-answer",
   "score_premise": "input",

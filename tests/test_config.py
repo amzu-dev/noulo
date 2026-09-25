@@ -27,6 +27,26 @@ def test_reads_dotenv_file(tmp_path):
     assert s.model == "nli-mobilebert-int8" and s.max_concurrency == 3
 
 
+def test_learning_defaults_to_verified_feedback_only(monkeypatch):
+    monkeypatch.delenv("NOULO_MEMORY_OBSERVED_WEIGHT", raising=False)
+    assert make().memory_observed_weight == 0.0
+
+
+@pytest.mark.parametrize("source", ["constructor", "environment", "dotenv"])
+def test_observed_learning_preserves_explicit_opt_in(source, monkeypatch, tmp_path):
+    monkeypatch.delenv("NOULO_MEMORY_OBSERVED_WEIGHT", raising=False)
+    if source == "constructor":
+        settings = make(memory_observed_weight=0.25)
+    elif source == "environment":
+        monkeypatch.setenv("NOULO_MEMORY_OBSERVED_WEIGHT", "0.25")
+        settings = make()
+    else:
+        env = tmp_path / ".env"
+        env.write_text("NOULO_MEMORY_OBSERVED_WEIGHT=0.25\n")
+        settings = Settings(_env_file=env)
+    assert settings.memory_observed_weight == 0.25
+
+
 def test_non_loopback_host_requires_explicit_network_opt_in():
     with pytest.raises(ConfigError, match="NOULO_ALLOW_NETWORK"):
         make(host="0.0.0.0").check()

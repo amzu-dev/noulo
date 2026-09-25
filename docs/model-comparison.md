@@ -21,6 +21,11 @@ noulo benchmark --all --download --tune --compare benchmark/results/comparison.m
 | calibration | 50 / 50 / 20 | 40 | 35 |
 | test | 50 / 50 / 20 | 40 | 35 |
 
+> These are historical measurements on an M1 Pro. The latest accuracy pass changes the
+> default Choice premise strategy and adds verified-only learning defaults. See
+> [Accuracy guide](accuracy.md) for a reproducible local before/after comparison on an M4;
+> hardware, runtime and local tuning overrides can affect results.
+
 ## Results (test split)
 
 | Model | Quant | Size | Peak RAM¹ | Cold start | Choice acc | Noul acc | Noul ECE | Score MAE | P50 | P95 |

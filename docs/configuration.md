@@ -70,7 +70,7 @@ See [models.md](models.md) for the `models.json` format.
 
 | Setting | Default | |
 |---|---|---|
-| `NOULO_LEARNING_ENABLED` | `true` | Record cases and let similar past cases adjust results |
+| `NOULO_LEARNING_ENABLED` | `true` | Record cases; by default only verified feedback or taught examples adjust results |
 | `NOULO_EMBEDDER` | `minilm-l6-v2-int8` | Embedder for similarity search; `hashing` needs no model; an `embedders` entry in `models.json` can point at an OpenAI-compatible `/embeddings` API |
 | `NOULO_MEMORY_STORE` | `sqlite` | `sqlite`, `qdrant`, `chroma`, or `package.module:ClassName` |
 | `NOULO_MEMORY_LOCATION` | `data/memory.sqlite3` | File or directory for local stores; `http(s)://...` for remote servers; `:memory:` for tests |
@@ -79,11 +79,25 @@ See [models.md](models.md) for the `models.json` format.
 | `NOULO_MEMORY_TOP_K` | `8` | Neighbours considered |
 | `NOULO_MEMORY_MIN_SIMILARITY` | `0.80` | Cosine similarity a past input needs to count |
 | `NOULO_MEMORY_FEEDBACK_WEIGHT` | `1.0` | Weight of verified (feedback) cases |
-| `NOULO_MEMORY_OBSERVED_WEIGHT` | `0.25` | Weight of past unverified outputs (`0` = feedback-only learning) |
+| `NOULO_MEMORY_OBSERVED_WEIGHT` | `0.0` | Unverified outputs are recorded but do not affect results; explicit `0.25` opts in to legacy observed learning |
 | `NOULO_MEMORY_MAX_INFLUENCE` | `0.9` | Upper bound on how far memory can move a result |
 | `NOULO_MEMORY_PRIOR_STRENGTH` | `0.5` | Evidence needed before memory has much influence |
 
 See [learning.md](learning.md) for how these interact.
+
+### Migration from observed learning
+
+The built-in observed weight is now `0.0`, previously `0.25`. Existing memory records and
+verified feedback need no migration or deletion. Learning is still enabled and records
+evaluations, but only verified outcomes influence results by default.
+
+An explicit `NOULO_MEMORY_OBSERVED_WEIGHT=0.25` in an existing `.env` or environment **keeps
+the legacy behaviour**. Remove that override or change it to `0.0` to adopt verified-only
+learning; restart the server after changing it. `noulo config unset memory_observed_weight`
+removes the `.env` entry, not an exported environment variable. Programmatic callers can
+retain observed learning with `Settings(memory_observed_weight=0.25)` or
+`MemoryConfig(observed_weight=0.25)`. See the [learning migration notes](learning.md#migration-verified-feedback-only-defaults)
+for details and the risk of reinforcing incorrect model outputs.
 
 ## Security defaults
 

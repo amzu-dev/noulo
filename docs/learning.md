@@ -1,7 +1,9 @@
 # Learning from inputs
 
-noulo can remember the cases it evaluates, and your corrections, and use them to adjust
-future answers for **similar inputs to the same task**. This is retrieval-augmented, like
+noulo remembers the cases it evaluates and your corrections. By default, **only verified
+feedback or taught examples** adjust future answers for **similar inputs to the same task**.
+Unverified model outputs are still recorded for inspection and later feedback, but repeating
+an answer does not turn it into trusted evidence. This is retrieval-augmented, like
 RAG, but instead of adding text to a prompt it blends the outcomes of retrieved past cases
 into the model's probabilities. It works the same for local and remote models.
 
@@ -36,12 +38,12 @@ panel in the frontend. Delete everything with `noulo learning clear --yes`.
 ```mermaid
 flowchart TB
   accTitle: How learning changes an answer
-  accDescr: Similar past cases for the same task are recalled, weighted by similarity and whether they were verified, and blended into the model's answer with a capped influence; every case is recorded and feedback marks it as verified.
+  accDescr: Similar past cases for the same task are recalled; only verified outcomes have nonzero weight by default and can change the answer. Every case is recorded and feedback marks it as verified.
 
   Q["New request"] --> T{"Same task seen before?"}
   T -- no --> A["Model answer as is"]
   T -- yes --> R["Recall up to 8 similar<br/>past inputs<br/>similarity ≥ 0.80"]
-  R --> W["Weight each case<br/>verified 1.0<br/>observed 0.25"]
+  R --> W["Weight each case<br/>verified 1.0<br/>observed 0.0 (default)"]
   W --> I["Influence<br/>α = 0.9 · W / (W + 0.5)"]
   I --> B["Blend<br/>(1 − α) · model<br/>+ α · memory"]
   A --> ANS(["Answer"])
@@ -55,10 +57,13 @@ flowchart TB
 
 For a new request, noulo:
 
-1. **Retrieves** up to `top_k` (8) past records with the same primitive and task key whose
-   inputs have cosine similarity of at least `min_similarity` (0.80) to the new input.
+1. **Retrieves** up to `top_k` (8) positive-weight past records with the same primitive and
+   task key whose inputs have cosine similarity of at least `min_similarity` (0.80).
+   Zero-weight records are excluded **before the final top-k limit**, so closer unverified
+   observations cannot displace verified corrections under the default settings.
 2. **Weights** each one: `w = similarity × (feedback_weight if verified else observed_weight)`,
-   with defaults `1.0` and `0.25`.
+   with defaults `1.0` and `0.0`. Unverified outcomes have zero weight unless you explicitly
+   opt in to observed learning.
 3. **Sets its influence** from the total evidence `W = Σw`:
    `α = max_influence × W / (W + prior_strength)` (defaults `0.9`, `0.5`).
    One exact verified match gives α = 0.6; more agreeing evidence approaches 0.9.
@@ -66,9 +71,18 @@ For a new request, noulo:
    - Noul / Score: `(1 − α) · model + α · weighted mean of past outcomes`
    - Choice: `(1 − α) · model distribution + α · weighted votes`, counting only votes for
      options **you supplied in this request**, so memory can never invent an option.
-5. **Records** the new case with the model's pre-blend output, so memory doesn't feed on itself.
+5. **Records** the new case with the model's pre-blend output, not the memory-adjusted answer.
 
-`?diagnostics=true` shows `learning.applied`, `influence` (α) and `matches`.
+With no positively weighted matches, the model's answer is unchanged. `?diagnostics=true`
+shows `learning.applied=false`, `influence=0.0` and `matches=0` in that case, even if unverified
+records were retrieved. These diagnostics describe the cases used for blending, not the
+total number of stored records.
+
+To preserve compatibility with custom vector stores, recall expands the search prefix
+geometrically when nearer zero-weight records hide eligible evidence. It stops at enough
+usable matches or exhaustion, bounded by a stored-count snapshot. Usually this needs one
+search, but sparse feedback in a large memory can require O(log N) searches and O(N)
+returned records, plus repeated backend work. Measure that cost for large remote stores.
 
 Example:
 
@@ -149,11 +163,32 @@ Bad examples don't stop the rest: each one is reported with its line number (for
 
 | Goal | Setting |
 |---|---|
-| Only learn from explicit feedback | `NOULO_MEMORY_OBSERVED_WEIGHT=0` |
+| Only learn from explicit feedback or taught examples (default) | `NOULO_MEMORY_OBSERVED_WEIGHT=0.0` |
+| Opt in to learning from unverified model outputs (legacy behaviour) | `NOULO_MEMORY_OBSERVED_WEIGHT=0.25`; may reinforce incorrect predictions |
 | Make feedback override the model more strongly | raise `NOULO_MEMORY_MAX_INFLUENCE` (≤ 1) or lower `NOULO_MEMORY_PRIOR_STRENGTH` |
 | Only near-identical inputs count | raise `NOULO_MEMORY_MIN_SIMILARITY` (e.g. `0.9`) |
 | Paraphrases count more | lower it (e.g. `0.7`); watch for unrelated matches |
 | No embedding model | `NOULO_EMBEDDER=hashing` (lexical similarity only) |
+
+## Migration: verified-feedback-only defaults
+
+The default observed weight changed from `0.25` to `0.0` in both runtime `Settings` and
+direct `MemoryConfig` construction. Existing records and verified feedback are retained;
+there is **no storage migration and no need to clear memory**. With the new default,
+unverified records no longer affect results until feedback verifies them. Learning remains
+enabled, so new evaluations are still recorded and deduplicated.
+
+Explicit settings are preserved. If an older `.env` (including one copied from the old
+`.env.example`) or environment contains `NOULO_MEMORY_OBSERVED_WEIGHT=0.25`, that deployment
+still opts in to observed learning. To adopt the safer default, remove the override from
+both places or set it to `0.0`, then restart the server.
+`noulo config unset memory_observed_weight` removes the `.env` entry only; an exported
+environment variable still takes precedence.
+
+To retain the legacy behaviour deliberately, set `NOULO_MEMORY_OBSERVED_WEIGHT=0.25` and
+restart, or pass `Settings(memory_observed_weight=0.25)` / `MemoryConfig(observed_weight=0.25)`
+when constructing a new runtime or memory. This restores unverified-output blending, not
+verification: wrong model answers can influence future results without any correction.
 
 ## Vector stores: local or remote
 

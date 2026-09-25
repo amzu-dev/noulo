@@ -1,10 +1,12 @@
 import pytest
 
 from noulo.api.validation import ChoiceOption, ChoiceRequest, NoulRequest, ScoreRequest
+from noulo.config import Settings
 from noulo.inference.embedder import HashingEmbedder
 from noulo.inference.engine import DecisionEngine, EngineUnavailable, RecordNotFound
 from noulo.inference.memory import LearningMemory
 from noulo.inference.stores import open_store
+from noulo.runtime import build_memory, build_registry
 from tests.fakes import FakeBackend, FakeLoader
 
 OPTIONS = [ChoiceOption(id="A", text="Billing"), ChoiceOption(id="B", text="Sales")]
@@ -38,6 +40,123 @@ def test_repeated_identical_evaluations_are_deduplicated():
     first = engine.noul(INPUT, "p").record_id
     second = engine.noul(INPUT, "p").record_id
     assert first == second and engine.memory.stats()["records"] == 1
+
+
+@pytest.fixture(params=["direct", "settings"])
+def default_memory_factory(request, tmp_path, monkeypatch):
+    """Exercise both direct MemoryConfig defaults and the runtime Settings wiring."""
+    monkeypatch.delenv("NOULO_MEMORY_OBSERVED_WEIGHT", raising=False)
+    if request.param == "direct":
+        return open_memory
+    settings = Settings(
+        _env_file=None,
+        models_dir=tmp_path / "models",
+        models_file=None,
+        embedder="hashing",
+        memory_store="sqlite",
+        memory_location=":memory:",
+    )
+    registry = build_registry(settings)
+    return lambda: build_memory(settings, registry)
+
+
+@pytest.mark.parametrize(
+    ("case", "corrected"),
+    [
+        pytest.param(
+            NoulRequest(input=INPUT, proposition="The customer is happy."), False, id="noul"
+        ),
+        pytest.param(
+            ChoiceRequest(input=INPUT, question="Which team?", choices=OPTIONS), "A", id="choice"
+        ),
+        pytest.param(
+            ScoreRequest(
+                input="There is a typo in the wiki footer.",
+                question="How severe is this incident?",
+                rubric=["low", "mid", "high"],
+            ),
+            0.0,
+            id="score",
+        ),
+    ],
+)
+def test_default_memory_ignores_repeated_wrong_observations_until_feedback(
+    default_memory_factory, case, corrected
+):
+    backend = FakeBackend(noul_value=0.2, choice_probs=[0.55, 0.45], score_probs=[0.8, 0.0, 0.2])
+    engine = engine_with(backend, memory_factory=default_memory_factory)
+    try:
+        baseline = engine.evaluate(case, diagnostics=True)
+        # Simulate stale, incorrect model outputs for this exact case. Using a
+        # different output matters: blending identical scalar values cannot move them.
+        backend.noul_value = 0.9
+        backend.choice_probs = [0.1, 0.9]
+        backend.score_probs = [0.0, 0.0, 1.0]
+        for _ in range(10):
+            observed = engine.evaluate(case)
+        [record] = engine.memory.records()
+        assert record["hits"] == 11
+        assert engine.memory.stats()["verified"] == 0
+        assert observed.record_id == baseline.record_id
+
+        backend.noul_value = 0.2
+        backend.choice_probs = [0.55, 0.45]
+        backend.score_probs = [0.8, 0.0, 0.2]
+        for _ in range(3):
+            result = engine.evaluate(case, diagnostics=True)
+            assert result.value == baseline.value
+            assert result.diagnostics == baseline.diagnostics
+            assert result.diagnostics["learning"] == {
+                "applied": False,
+                "influence": 0.0,
+                "matches": 0,
+            }
+
+        engine.feedback(observed.record_id, corrected)
+        backend.noul_value = 0.9
+        backend.choice_probs = [0.1, 0.9]
+        backend.score_probs = [0.0, 0.0, 1.0]
+        for _ in range(3):
+            result = engine.evaluate(case, diagnostics=True)
+            if isinstance(case, ChoiceRequest):
+                assert result.value == "A"
+            else:
+                assert result.value < 0.5
+            assert result.diagnostics["learning"]["applied"] is True
+            assert result.diagnostics["learning"]["influence"] > 0.0
+        assert engine.memory.stats()["verified"] == 1
+    finally:
+        engine.shutdown()
+
+
+def test_explicit_observed_weight_enables_learning_without_feedback(monkeypatch, tmp_path):
+    monkeypatch.setenv("NOULO_MEMORY_OBSERVED_WEIGHT", "0.25")
+    settings = Settings(
+        _env_file=None,
+        models_dir=tmp_path / "models",
+        models_file=None,
+        embedder="hashing",
+        memory_store="sqlite",
+        memory_location=":memory:",
+    )
+    registry = build_registry(settings)
+    backend = FakeBackend(noul_value=0.9)
+    engine = engine_with(backend, memory_factory=lambda: build_memory(settings, registry))
+    try:
+        record_id = engine.noul(INPUT, "The customer is happy.").record_id
+        backend.noul_value = 0.2
+        result = engine.noul(INPUT, "The customer is happy.", diagnostics=True)
+        assert result.value == pytest.approx(0.41)
+        assert result.record_id == record_id
+        assert result.diagnostics["learning"] == {
+            "applied": True,
+            "influence": pytest.approx(0.3),
+            "matches": 1,
+        }
+        assert engine.memory.stats()["verified"] == 0
+        assert engine.memory.records()[0]["observedValue"] == 0.2
+    finally:
+        engine.shutdown()
 
 
 def test_noul_feedback_corrects_future_answers_for_the_same_case():
