@@ -28,6 +28,14 @@ flowchart LR
   class M core
 ```
 
+> [!WARNING]
+> **noulo is alpha software (version 0.1.0a1).** It works and is tested (840+ tests), but it's
+> early: the REST API, CLI, configuration and model catalog may change between releases without
+> a deprecation period. Accuracy on hard tasks is modest, and
+> performance has only been measured on macOS/arm64. Pin the exact version, check the
+> [known limitations](#known-limitations), and don't rely on it alone for decisions that
+> matter. Feedback and issues are welcome.
+
 ```bash
 $ noulo noul -i "The invoice has remained unpaid for 120 days." -p "The customer has an overdue payment."
 0.968

@@ -4,7 +4,8 @@
 - **Spec:** `GET /openapi.json` (OpenAPI 3.1; the committed copy is [`/openapi.json`](../openapi.json)).
   Interactive docs are at `/docs`. Use the spec to generate clients for JavaScript, Python, Go,
   Java, C#, Swift, Kotlin and other languages.
-- **Versioning:** everything under `/api/v1` is stable; breaking changes would go to `/api/v2`.
+- **Versioning:** noulo is **alpha** (0.1.0a1), so `/api/v1` may still change between releases.
+  From 1.0, `/api/v1` will be stable and breaking changes will go to `/api/v2`.
 - **Content type:** `application/json` in both directions.
 
 ## Decisions
@@ -87,7 +88,7 @@ of the bodies above; it is routed to the same implementation as the dedicated en
 | | Response |
 |---|---|
 | `GET /health` | `200 {"status":"ok","modelLoaded":true}` once the model has loaded and passed its readiness check; otherwise `503 {"status":"<state>","modelLoaded":false}` where state is `created`, `starting`, `stopping`, `stopped` or `failed` |
-| `GET /api/v1/info` | `{"name":"noulo","version":"0.1.0","model":"nli-deberta-v3-xsmall-int8","quantization":"INT8","capabilities":["choice","score","noul"],"backend":"onnx-nli","local":true,"learning":true,"device":"cpu","limits":{"maxBodyBytes":65536,"maxInputChars":5000,"maxTextChars":1000,"maxChoices":20,"maxRubricLevels":11,"maxImportItems":1000}}` |
+| `GET /api/v1/info` | `{"name":"noulo","version":"0.1.0a1","model":"nli-deberta-v3-xsmall-int8","quantization":"INT8","capabilities":["choice","score","noul"],"backend":"onnx-nli","local":true,"learning":true,"device":"cpu","limits":{"maxBodyBytes":65536,"maxInputChars":5000,"maxTextChars":1000,"maxChoices":20,"maxRubricLevels":11,"maxImportItems":1000}}` |
 
 `/health` and `/openapi.json` never require an API key.
 

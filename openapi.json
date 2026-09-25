@@ -3,7 +3,7 @@
   "info": {
     "title": "noulo",
     "description": "Local semantic decision service: Choice, Score and Noul primitives.",
-    "version": "0.1.0"
+    "version": "0.1.0a1"
   },
   "paths": {
     "/health": {

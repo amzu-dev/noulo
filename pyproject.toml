@@ -1,10 +1,17 @@
 [project]
 name = "noulo"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Local, CPU-only semantic decision engine: Choice, Score and Noul primitives over a quantised NLI model."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",

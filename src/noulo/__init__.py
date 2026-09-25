@@ -6,7 +6,7 @@ evaluate({"type": "noul", "input": "...", "proposition": "..."})
 
 from typing import Any
 
-__version__ = "0.1.0"
+__version__ = "0.1.0a1"
 __all__ = ["Noulo", "RequestError", "aevaluate", "close", "evaluate", "__version__"]
 
 

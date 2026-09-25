@@ -15,6 +15,9 @@ A local, CPU-first decision engine. You send text and get back one of three stri
 
 It runs an 83 MB INT8 NLI model on ONNX Runtime. It isn't a chatbot and never generates text.
 
+**Status: alpha (0.1.0a1).** Interfaces may change between releases. Pin the version, and don't
+treat its answers as authoritative for high-stakes decisions without checking them.
+
 ## Install (non-interactive)
 
 ```bash

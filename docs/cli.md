@@ -156,7 +156,7 @@ line with history (↑/↓, saved to `~/.noulo/history`), a completion menu that
 as you type `/`, and a status bar at the bottom.
 
 ```text
-╭─ ✻ noulo 0.1.0 - local decision engine ───────╮
+╭─ ✻ noulo 0.1.0a1 - local decision engine ─────╮
 │  server    ● ready  http://127.0.0.1:8787     │
 │  model     nli-deberta-v3-xsmall-int8 (INT8)  │
 │  learning  on                                 │
