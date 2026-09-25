@@ -45,6 +45,10 @@ A
 - **Switchable models:** three small models, three larger 0.5–1 GB models (each shown with download size, quantisation and measured RAM), any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp), or your own ONNX model. You can switch at runtime without downtime, or via `noulo model`, which restarts the service.
 - **Learning from inputs (RAG-style):** every case can be remembered, and feedback nudges future answers for similar inputs. It can be switched on or off live, and the vector store is pluggable: SQLite (default), Qdrant or Chroma (local or remote), or your own.
 - **Four ways in, one engine:** REST (`/api/v1`, OpenAPI), a Claude Code-style interactive CLI, a Python module, and the web frontend.
+- **GPU where it actually helps:** CUDA, DirectML or ROCm (and CoreML on Apple Silicon) through
+  ONNX Runtime, with automatic CPU fallback (`NOULO_DEVICE=auto|gpu|cpu|...`). `auto` is set
+  from measurements: CoreML was 12–100× *slower* than the CPU on an M1 Pro, so on Macs noulo
+  stays on the CPU unless you ask otherwise. See [docs/gpu.md](docs/gpu.md).
 - **Safe defaults:** binds to `127.0.0.1` only, has no wildcard CORS, supports an optional API key, and never exposes filesystem paths or secrets.
 - **Measured, not assumed:** the `noulo benchmark` command reports accuracy, calibration, latency, RAM and cold start, and compares models.
 
@@ -158,7 +162,9 @@ const response = await fetch("http://127.0.0.1:8787/api/v1/noul", {
 console.log((await response.json()).value); // 0.97
 ```
 
-See [docs/api.md](docs/api.md) for the full reference, status codes and more examples.
+See [docs/api.md](docs/api.md) for the full reference and status codes, and
+[docs/examples.md](docs/examples.md) for worked Noul, Choice and Score examples in every
+interface.
 
 ### Python
 
@@ -198,6 +204,17 @@ toggle, feedback, the memory browser and diagnostics, in light and dark themes.
 | **Most accurate** (larger) | `zeroshot-deberta-v3-base-fp32` | 739 MB | FP32 | 1234 MB | 91% | **85.0%** | **0.115** |
 | Larger NLI | `nli-deberta-v3-base-fp32` | 739 MB | FP32 | 1419 MB | 89% | 70.0% | 0.175 |
 | BART (slow) | `nli-bart-large-fp16` | 816 MB | FP16 | 2010 MB | 91% | 70.0% | 0.205 |
+| Qwen3 0.6B (LLM) | `qwen3-0.6b-q4f16` | 570 MB | INT4 | 2588 MB | 63.0% | 67.5% | 0.381 |
+| Qwen2.5 0.5B (LLM) | `qwen2.5-0.5b-q4` | 786 MB | INT4 | 2113 MB | 67.0% | 55.0% | 0.334 |
+| Gemma 3 1B (LLM) | `gemma-3-1b-q4` | 859 MB | INT4 | 1295 MB | 68.0% | 57.5% | 0.314 |
+| LFM2 1.2B (LLM) | `lfm2-1.2b-q4` | 850 MB | INT4 | 856 MB | 85.0% | 87.5% | 0.221 |
+
+The last group is **small open-weight LLMs** (Qwen, Gemma, Liquid LFM2) at 4-bit. noulo
+reads their next-token probabilities for the answer labels in a single forward pass, so they
+never generate text. Measured honestly: **LFM2 1.2B** has the best Choice accuracy of any model
+(87.5%), but Qwen and Gemma score below the 83 MB default. All of them are ~100× slower per
+call (0.4–0.9 s) and need 0.9–2.6 GB of RAM. Details are in
+[docs/models.md](docs/models.md#small-llms-4-bit-05-09-gb).
 
 Choosing a model that isn't installed downloads it once from Hugging Face, sets
 `NOULO_MODEL`, and restarts the service with the frontend. Tuned templates, calibration and
@@ -328,7 +345,7 @@ Windows, `noulo stop` terminates the process instead of sending a graceful signa
 
 ## Development
 
-The project was built test-first. There are 740+ tests in total: unit, property-based
+The project was built test-first. There are 840+ tests in total: unit, property-based
 (Hypothesis), API contract, CLI, vector-store contract, real-model acceptance, and an
 end-to-end test that drives a real background server through the CLI.
 
@@ -367,12 +384,14 @@ openapi.json      generated API specification
 | Guide | |
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first run, first requests |
+| [Examples](docs/examples.md) | Noul, Choice and Score in the session, CLI, curl, JavaScript and Python |
 | [CLI reference](docs/cli.md) | Every command, the interactive session, exit codes |
 | [REST API](docs/api.md) | Endpoints, schemas, errors, auth, examples |
 | [Configuration](docs/configuration.md) | Every `NOULO_*` setting, `.env`, security |
 | [Models](docs/models.md) | Basic and larger models, switching, OpenAI endpoints, your own ONNX, calibration |
 | [Learning](docs/learning.md) | How the memory works, feedback, vector stores |
-| [Model comparison](docs/model-comparison.md) | Measured results for nine models and three quantisations |
+| [Model comparison](docs/model-comparison.md) | Measured results for every catalog model and quantisation |
+| [GPU and accelerators](docs/gpu.md) | CoreML, CUDA, DirectML, ROCm: setup and measured speed-ups |
 | [Architecture](docs/architecture.md) | Design, lifecycle, concurrency, invariants |
 | [Development](docs/development.md) | Tests, TDD workflow, extending noulo |
 

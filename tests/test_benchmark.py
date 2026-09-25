@@ -160,3 +160,37 @@ def test_low_memory_runs_do_not_overwrite_default_measurements(tmp_path, monkeyp
     assert written == []
     run.main(args)
     assert len(written) == 1
+
+
+def test_model_size_includes_external_weight_files(tmp_path):
+    from noulo.benchmark.run import model_size_bytes
+
+    (tmp_path / "model.onnx").write_bytes(b"g" * 10)
+    (tmp_path / "model_q4.onnx_data").write_bytes(b"w" * 90)
+    (tmp_path / "tokenizer.json").write_bytes(b"t" * 5)
+    assert model_size_bytes(tmp_path) == 100
+    assert model_size_bytes(tmp_path / "missing") is None
+
+
+def test_worker_result_is_found_among_noisy_runtime_output():
+    from noulo.benchmark.run import RESULT_PREFIX, parse_worker_output
+
+    noisy = (
+        "CoreML: logits has unbounded dimension\n"
+        f'{RESULT_PREFIX}{{"model": "m", "p50Ms": 7.5}}\n'
+        "more runtime chatter\n"
+    )
+    assert parse_worker_output(noisy) == {"model": "m", "p50Ms": 7.5}
+
+
+def test_worker_output_without_result_is_reported_as_error():
+    from noulo.benchmark.run import parse_worker_output
+
+    assert "no result" in parse_worker_output("just warnings\n")["error"]
+
+
+def test_worker_result_is_found_even_when_runtime_output_has_no_trailing_newline():
+    from noulo.benchmark.run import RESULT_PREFIX, parse_worker_output
+
+    glued = f'...dimension which is not supported..{RESULT_PREFIX}{{"model": "m"}}\n'
+    assert parse_worker_output(glued) == {"model": "m"}

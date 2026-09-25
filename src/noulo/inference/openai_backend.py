@@ -27,17 +27,19 @@ from typing import Any
 
 import httpx
 
+from noulo.inference.llm_prompts import (
+    NOUL_LABELS,
+    SYSTEM_PROMPT,
+    choice_task,
+    messages,
+    noul_task,
+    noul_value,
+    score_task,
+)
 from noulo.inference.types import BackendError, BackendInfo, ModelLoadError
 
 __all__ = ["NOUL_LABELS", "SYSTEM_PROMPT", "OpenAIBackend"]
 
-SYSTEM_PROMPT = (
-    "You are a strict classifier. Read the input and the task, then reply with exactly one "
-    "label from the allowed labels and nothing else: no explanation, no punctuation."
-)
-NOUL_LABELS = ("yes", "no", "unknown")
-
-_LETTERS = string.ascii_uppercase
 _LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 logger = logging.getLogger(__name__)
@@ -84,33 +86,16 @@ class OpenAIBackend:
     # ------------------------------------------------------------------ primitives
 
     def noul(self, input: str, proposition: str) -> float:
-        task = (
-            f"Proposition: {proposition}\n\n"
-            'Answer "yes" if the input supports the proposition, "no" if the input contradicts '
-            'it, or "unknown" if the input does not determine it.\n'
-            "Reply with exactly one label: yes, no or unknown."
-        )
-        p_yes, _p_no, p_unknown = self._classify(_user_prompt(input, task), NOUL_LABELS)
-        return p_yes + 0.5 * p_unknown
+        task = noul_task(input, proposition)
+        return noul_value(self._classify(task.prompt, task.labels))
 
     def choice(self, input: str, question: str, options: Sequence[str]) -> list[float]:
-        labels = _letter_labels(len(options))
-        task = (
-            f"Question: {question}\n\nOptions:\n{_listing(labels, options)}\n\n"
-            f"Reply with exactly one letter: {', '.join(labels)}."
-        )
-        return self._classify(_user_prompt(input, task), labels)
+        task = choice_task(input, question, options)
+        return self._classify(task.prompt, task.labels)
 
     def score(self, input: str, question: str, rubric: Sequence[str]) -> list[float]:
-        labels = _letter_labels(len(rubric))
-        task = (
-            f"Question: {question}\n\n"
-            f"Rubric levels, ordered from lowest (A) to highest ({labels[-1]}):\n"
-            f"{_listing(labels, rubric)}\n\n"
-            "Reply with exactly one letter: the level that best fits the input "
-            f"({', '.join(labels)})."
-        )
-        return self._classify(_user_prompt(input, task), labels)
+        task = score_task(input, question, rubric)
+        return self._classify(task.prompt, task.labels)
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -172,10 +157,7 @@ class OpenAIBackend:
     def _payload(self, prompt: str) -> dict[str, Any]:
         return {
             "model": self._model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
+            "messages": messages(prompt),
             "temperature": 0,
             "max_tokens": 1,
             "logprobs": True,
@@ -195,23 +177,6 @@ class OpenAIBackend:
                 self.info.id,
                 self._model,
             )
-
-
-# ---------------------------------------------------------------------- prompts
-
-
-def _letter_labels(count: int) -> str:
-    if not 1 <= count <= len(_LETTERS):
-        raise ValueError(f"Expected between 1 and {len(_LETTERS)} candidates, got {count}.")
-    return _LETTERS[:count]
-
-
-def _listing(labels: str, items: Sequence[str]) -> str:
-    return "\n".join(f"{label}. {item}" for label, item in zip(labels, items, strict=True))
-
-
-def _user_prompt(input: str, task: str) -> str:
-    return f'Input:\n"""\n{input}\n"""\n\n{task}'
 
 
 # ---------------------------------------------------------------------- probability extraction

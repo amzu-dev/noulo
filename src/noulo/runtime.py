@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from .config import Settings
 from .inference.engine import DecisionEngine
@@ -22,6 +23,11 @@ def build_registry(settings: Settings) -> ModelRegistry:
         else None,
         threads=settings.threads,
         low_memory=settings.low_memory,
+        device=settings.device,
+        cache_dir=(
+            settings.run_dir if settings.run_dir.is_absolute() else Path.cwd() / settings.run_dir
+        )
+        / "accelerator-cache",
     )
 
 

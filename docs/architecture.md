@@ -18,6 +18,7 @@
                               v              v              (embedder.py) (stores/: sqlite,
                           DecisionBackend (types.py)                       qdrant, chroma, custom)
                            ├─ NliBackend ── OnnxNliModel (ONNX Runtime + tokenizers, CPU)
+                           ├─ LlmBackend ── OnnxCausalLM (4-bit Qwen/Gemma/LFM2, one forward pass)
                            └─ OpenAIBackend ── /v1/chat/completions + logprobs
 ```
 
@@ -89,7 +90,7 @@ the timeout.
 | ONNX Runtime + `tokenizers`, no PyTorch | Keeps a running server at ~300–500 MiB (model-dependent) and installs fast on every OS/arch |
 | INT8 dynamic quantisation | Best measured size/speed/accuracy balance (see [model-comparison.md](model-comparison.md)) |
 | Calibration as a separate JSON layer | Can be refitted or replaced without touching the model |
-| Logprobs for remote LLMs | Honours "never ask a generative model for a number" while still supporting them |
+| Logprobs for remote LLMs, next-token probabilities for local LLMs | Honours "never ask a generative model for a number" while still supporting them; local LLMs need one forward pass, no generation loop |
 | Learning as a probability blend | Works with any backend, is bounded by `max_influence`, can never invent an option |
 | Pluggable vector store | SQLite with zero setup; Qdrant/Chroma/custom when you outgrow it |
 | Python/FastAPI | Requested by the project owner (the original spec preferred Node.js) |

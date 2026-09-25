@@ -84,3 +84,7 @@ def test_secret_settings_are_flagged():
     from noulo.config import SECRET_FIELDS
 
     assert {"api_key", "openai_api_key", "memory_api_key"} <= set(SECRET_FIELDS)
+
+
+def test_device_defaults_to_auto():
+    assert make().device == "auto"

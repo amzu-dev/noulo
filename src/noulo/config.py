@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     model: str = "nli-deberta-v3-xsmall-int8"
     threads: int | None = None
     low_memory: bool = False
+    device: str = "auto"
     openai_base_url: str | None = None
     openai_model: str | None = None
     openai_api_key: SecretStr | None = None
@@ -142,6 +143,7 @@ SETTING_HELP: dict[str, str] = {
     "model": "Model loaded at startup (see /model)",
     "threads": "ONNX Runtime intra-op threads (empty = automatic)",
     "low_memory": "Trade some speed for ~25% less RAM (skips ONNX constant folding)",
+    "device": "Where models run: auto, cpu, gpu, coreml, cuda, directml or rocm",
     "openai_base_url": "Shortcut OpenAI-compatible endpoint registered as model 'openai'",
     "openai_model": "Model name for the 'openai' shortcut endpoint",
     "openai_api_key": "API key for the 'openai' shortcut endpoint",

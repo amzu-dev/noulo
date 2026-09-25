@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .devices import CPU_PLACEMENT, Placement, create_session
 from .types import ModelLoadError
 
 _CANONICAL_LABELS = ("entailment", "neutral", "contradiction", "not_entailment")
@@ -55,6 +56,7 @@ class OnnxNliModel:
         max_length: int = 512,
         threads: int | None = None,
         low_memory: bool = False,
+        placement: Placement | None = None,
     ):
         """low_memory skips constant folding, which otherwise re-materialises INT8
         embedding tables as FP32 (~110 MiB less RAM for DeBERTa-xsmall, slightly slower)."""
@@ -77,8 +79,8 @@ class OnnxNliModel:
             if threads:
                 options.intra_op_num_threads = threads
             extra = {"disabled_optimizers": ["ConstantFolding"]} if low_memory else {}
-            self._session = ort.InferenceSession(
-                str(model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"], **extra
+            self._session, self.device = create_session(
+                model_dir / "model.onnx", options, placement or CPU_PLACEMENT, **extra
             )
             self._input_names = {i.name for i in self._session.get_inputs()}
 

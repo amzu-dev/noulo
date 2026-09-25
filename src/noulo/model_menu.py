@@ -30,7 +30,7 @@ def facts(m: dict[str, Any]) -> str:
 
 
 def menu_items(listing: list[dict[str, Any]], active: str | None) -> list[tuple[str, str, str]]:
-    """(value, label, facts): the 3 basic models, the larger tier, your models, plug-in guide."""
+    """(value, label, facts): basic models, larger models, small LLMs, yours, plug-in guide."""
     by_id = {m["id"]: m for m in listing}
     curated_ids = {c.id for c in CURATED_MODELS}
 
@@ -44,6 +44,7 @@ def menu_items(listing: list[dict[str, Any]], active: str | None) -> list[tuple[
 
     items = [row(c.label, c.id) for c in CURATED_MODELS]
     items += [row(m.get("label") or "Larger", m["id"]) for m in listing if m.get("tier") == "large"]
+    items += [row(m.get("label") or "LLM", m["id"]) for m in listing if m.get("tier") == "llm"]
     items += [
         row("Yours", m["id"])
         for m in listing

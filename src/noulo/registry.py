@@ -28,6 +28,15 @@ from .inference.types import DecisionBackend, Embedder, ModelLoadError
 HF_BASE = "https://huggingface.co"
 PROFILES_DIR = Path(__file__).resolve().parent / "profiles"  # measured tuning per catalog model
 REQUIRED_FILES = ("model.onnx", "tokenizer.json", "config.json")
+LLM_REQUIRED_FILES = ("model.onnx", "tokenizer.json", "tokenizer_config.json")
+
+
+def _required(kind: str) -> tuple[str, ...]:
+    return LLM_REQUIRED_FILES if kind == "llm" else REQUIRED_FILES
+
+
+def _backend_for(kind: str) -> str:
+    return "onnx-llm" if kind == "llm" else "onnx-nli"
 
 
 class UnknownModelError(ModelLoadError):
@@ -46,6 +55,7 @@ class CatalogEntry:
     # "basic" (< 200 MB) | "large" (0.5-1 GB) | "experimental" (installable, not offered in menus)
     tier: str = "basic"
     label: str | None = None  # short name shown in model menus
+    extra_files: tuple[str, ...] = ()  # e.g. external weights; saved under their own names
     profile: dict[str, Any] = field(default_factory=dict)
 
     def onnx_path(self) -> str:
@@ -194,6 +204,53 @@ CATALOG: tuple[CatalogEntry, ...] = (
         tier="large",
         label="BART (slow)",
     ),
+    # --- llm: small instruction-tuned LLMs, 4-bit, scored by next-token probability
+    CatalogEntry(
+        "qwen3-0.6b-q4f16",
+        "llm",
+        "onnx-community/Qwen3-0.6B-ONNX",
+        "onnx/model_q4f16.onnx",
+        "INT4",
+        "Qwen3 0.6B (Alibaba, Apache-2.0), 4-bit weights / FP16 activations",
+        570,
+        tier="llm",
+        label="Qwen3 0.6B",
+    ),
+    CatalogEntry(
+        "qwen2.5-0.5b-q4",
+        "llm",
+        "onnx-community/Qwen2.5-0.5B-Instruct",
+        "onnx/model_q4.onnx",
+        "INT4",
+        "Qwen2.5 0.5B Instruct (Alibaba, Apache-2.0), 4-bit weights",
+        786,
+        tier="llm",
+        label="Qwen2.5 0.5B",
+    ),
+    CatalogEntry(
+        "gemma-3-1b-q4",
+        "llm",
+        "onnx-community/gemma-3-1b-it-ONNX",
+        "onnx/model_q4.onnx",
+        "INT4",
+        "Gemma 3 1B instruct (Google, Gemma terms of use), 4-bit weights",
+        859,
+        tier="llm",
+        label="Gemma 3 1B",
+        extra_files=("onnx/model_q4.onnx_data",),
+    ),
+    CatalogEntry(
+        "lfm2-1.2b-q4",
+        "llm",
+        "onnx-community/LFM2-1.2B-ONNX",
+        "onnx/model_q4.onnx",
+        "INT4",
+        "LFM2 1.2B (Liquid AI, LFM Open License), 4-bit weights",
+        850,
+        tier="llm",
+        label="LFM2 1.2B",
+        extra_files=("onnx/model_q4.onnx_data",),
+    ),
     # --- embedders
     CatalogEntry(
         "minilm-l6-v2-int8",
@@ -248,6 +305,14 @@ def _http_fetch(url: str, dest: Path, progress: Callable[[str], None] | None = N
                     next_mark += 10
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def _check_base_url(base_url: str) -> str:
     parsed = urlparse(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
@@ -266,15 +331,25 @@ class ModelRegistry:
         openai_api_key: str | None = None,
         threads: int | None = None,
         open_nli_model: Callable[..., Any] | None = None,
+        open_llm: Callable[..., Any] | None = None,
         profiles_dir: str | Path = PROFILES_DIR,
         low_memory: bool = False,
+        device: str = "cpu",
+        cache_dir: str | Path | None = None,
     ):
+        from .inference.devices import DEVICES
+
+        if device.lower() not in DEVICES:
+            raise ValueError(f"Unknown device {device!r}; use one of: {', '.join(DEVICES)}.")
         self.models_dir = Path(models_dir)
         self.models_file = Path(models_file) if models_file else None
         self._threads = threads
         self._open_nli_model = open_nli_model
+        self._open_llm = open_llm
         self._profiles_dir = Path(profiles_dir)
         self._low_memory = low_memory
+        self._device = device.lower()
+        self._cache_dir = Path(cache_dir) if cache_dir else None
         self._env_openai: dict[str, Any] | None = None
         if openai_base_url and openai_model:
             self._env_openai = {
@@ -341,17 +416,25 @@ class ModelRegistry:
         path: str | Path,
         quantization: str = "unknown",
         description: str | None = None,
+        kind: str = "nli",
     ) -> None:
-        """Register your own ONNX NLI model directory (model.onnx, tokenizer.json, config.json)."""
+        """Register your own ONNX model directory.
+
+        kind="nli": model.onnx, tokenizer.json, config.json (with an entailment label).
+        kind="llm": a causal LM export: model.onnx, tokenizer.json, tokenizer_config.json
+        (with a chat template); external weight files next to model.onnx are fine.
+        """
+        if kind not in ("nli", "llm"):
+            raise ValueError("kind must be 'nli' or 'llm'.")
         if id in _CATALOG_BY_ID or any(m.get("id") == id for m in self._user_models()):
             raise ValueError(f"A model with id {id!r} already exists.")
         model_dir = Path(path).expanduser().resolve()
-        missing = [name for name in REQUIRED_FILES if not (model_dir / name).exists()]
+        missing = [name for name in _required(kind) if not (model_dir / name).exists()]
         if missing:
             raise ValueError(f"Model directory is missing: {', '.join(missing)}.")
         entry: dict[str, Any] = {
             "id": id,
-            "backend": "onnx-nli",
+            "backend": _backend_for(kind),
             "path": str(model_dir),
             "quantization": quantization,
         }
@@ -380,14 +463,18 @@ class ModelRegistry:
     # ------------------------------------------------------------------ listing
 
     def _installed(self, model_id: str) -> bool:
-        return all((self.models_dir / model_id / name).exists() for name in REQUIRED_FILES)
+        entry = _CATALOG_BY_ID.get(model_id)
+        kind = entry.kind if entry else "nli"
+        extras = tuple(Path(f).name for f in entry.extra_files) if entry else ()
+        model_dir = self.models_dir / model_id
+        return all((model_dir / name).exists() for name in (*_required(kind), *extras))
 
     def list(self) -> list[dict[str, Any]]:
         """Public listing (no filesystem paths, no secrets)."""
         listing = [
             {
                 "id": e.id,
-                "backend": "onnx-nli",
+                "backend": _backend_for(e.kind),
                 "model": e.repo,
                 "quantization": e.quantization,
                 "local": True,
@@ -399,7 +486,7 @@ class ModelRegistry:
                 **self._measured(e.id),
             }
             for e in CATALOG
-            if e.kind == "nli"
+            if e.kind in ("nli", "llm")
         ]
         for m in self._user_models():
             if m.get("backend") == "openai":
@@ -414,16 +501,17 @@ class ModelRegistry:
                         "description": m.get("description", "OpenAI-compatible endpoint"),
                     }
                 )
-            elif m.get("backend") == "onnx-nli":
+            elif m.get("backend") in ("onnx-nli", "onnx-llm"):
+                kind = "llm" if m["backend"] == "onnx-llm" else "nli"
                 listing.append(
                     {
                         "id": m["id"],
-                        "backend": "onnx-nli",
+                        "backend": m["backend"],
                         "model": m.get("model", m["id"]),
                         "quantization": m.get("quantization", "unknown"),
                         "local": True,
-                        "installed": self._installed_path(Path(m["path"])),
-                        "description": m.get("description", "Custom ONNX NLI model"),
+                        "installed": self._installed_path(Path(m["path"]), kind),
+                        "description": m.get("description", f"Custom ONNX {kind.upper()} model"),
                     }
                 )
         return listing
@@ -447,8 +535,8 @@ class ModelRegistry:
         }
 
     @staticmethod
-    def _installed_path(path: Path) -> bool:
-        return all((path / name).exists() for name in REQUIRED_FILES)
+    def _installed_path(path: Path, kind: str = "nli") -> bool:
+        return all((path / name).exists() for name in _required(kind))
 
     # ------------------------------------------------------------------ loading
 
@@ -480,8 +568,53 @@ class ModelRegistry:
             from .inference.model import OnnxNliModel
 
             opener = OnnxNliModel
-        model = opener(model_dir, threads=self._threads, low_memory=self._low_memory)
+        model = opener(
+            model_dir,
+            threads=self._threads,
+            low_memory=self._low_memory,
+            placement=self._placement(quantization),
+        )
         return NliBackend(model, model_id=model_id, quantization=quantization, **profile)
+
+    def _llm_backend(self, model_id: str, model_dir: Path, quantization: str) -> DecisionBackend:
+        from .inference.llm_backend import LlmBackend
+
+        installed = (
+            self._installed(model_id)
+            if model_id in _CATALOG_BY_ID
+            else self._installed_path(model_dir, "llm")
+        )
+        if not installed:
+            hint = (
+                f"run: noulo model download {model_id}"
+                if model_id in _CATALOG_BY_ID
+                else "check its files"
+            )
+            raise ModelLoadError(f"Model {model_id!r} is not installed; {hint}.")
+        opener = self._open_llm
+        if opener is None:
+            from .inference.causal_lm import OnnxCausalLM
+
+            opener = OnnxCausalLM
+        model = opener(
+            model_dir,
+            threads=self._threads,
+            low_memory=self._low_memory,
+            placement=self._placement(quantization),
+        )
+        return LlmBackend(model, model_id=model_id, quantization=quantization)
+
+    def _placement(self, precision: str) -> Any:
+        import onnxruntime as ort
+
+        from .inference.devices import resolve
+
+        return resolve(
+            self._device,
+            available=ort.get_available_providers(),
+            precision=precision,
+            cache_dir=self._cache_dir,
+        )
 
     def load_backend(self, model_id: str) -> DecisionBackend:
         entry = _CATALOG_BY_ID.get(model_id)
@@ -489,6 +622,8 @@ class ModelRegistry:
             return self._nli_backend(
                 model_id, self.models_dir / model_id, entry.quantization, dict(entry.profile)
             )
+        if entry is not None and entry.kind == "llm":
+            return self._llm_backend(model_id, self.models_dir / model_id, entry.quantization)
         for m in self._user_models():
             if m.get("id") != model_id:
                 continue
@@ -502,6 +637,10 @@ class ModelRegistry:
                     api_key=self._resolve_api_key(m),
                     timeout=float(m.get("timeout", 30.0)),
                     extra_body=m.get("extraBody"),
+                )
+            if m.get("backend") == "onnx-llm":
+                return self._llm_backend(
+                    model_id, Path(m["path"]), m.get("quantization", "unknown")
                 )
             if m.get("backend") == "onnx-nli":
                 return self._nli_backend(
@@ -564,6 +703,10 @@ class ModelRegistry:
                 "tokenizer.json": "tokenizer.json",
                 "config.json": "config.json",
             }
+            if entry.kind == "llm":
+                sources["tokenizer_config.json"] = "tokenizer_config.json"
+            for remote in entry.extra_files:
+                sources[Path(remote).name] = remote
             for local_name, remote_path in sources.items():
                 if progress:
                     progress(f"Downloading {entry.repo}/{remote_path}")
@@ -572,16 +715,18 @@ class ModelRegistry:
                     fetch(url, staging / local_name, progress)
                 else:
                     fetch(url, staging / local_name)
-            onnx_bytes = (staging / "model.onnx").read_bytes()
+            weights = ["model.onnx", *(Path(f).name for f in entry.extra_files)]
             manifest = {
                 "id": entry.id,
                 "kind": entry.kind,
                 "source": f"{HF_BASE}/{entry.repo}",
                 "file": entry.onnx_path(),
                 "quantization": entry.quantization,
-                "sha256": hashlib.sha256(onnx_bytes).hexdigest(),
-                "sizeBytes": len(onnx_bytes),
+                "sha256": _sha256(staging / "model.onnx"),
+                "sizeBytes": sum((staging / name).stat().st_size for name in weights),
             }
+            if entry.extra_files:
+                manifest["extraFiles"] = {name: _sha256(staging / name) for name in weights[1:]}
             (staging / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
             if target.exists():
                 for keep in ("calibration.json", "profile.json"):

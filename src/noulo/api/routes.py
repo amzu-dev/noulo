@@ -86,6 +86,7 @@ async def info(request: Request):
         "backend": model.backend,
         "local": model.local,
         "learning": engine.learning_enabled,
+        "device": model.device,
     }
 
 

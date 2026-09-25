@@ -45,3 +45,23 @@ def test_menu_labels_fit_the_label_column():
 
     labels = [c.label for c in CURATED_MODELS] + [e.label for e in CATALOG if e.label]
     assert all(len(label) <= 14 for label in labels)
+
+
+def test_llms_get_their_own_group_after_the_larger_models():
+    listing = [
+        *LISTING[:2],
+        {
+            "id": "qwen3-0.6b-q4f16",
+            "tier": "llm",
+            "label": "Qwen3 0.6B",
+            "sizeMB": 570,
+            "quantization": "INT4",
+            "installed": False,
+            "backend": "onnx-llm",
+        },
+    ]
+    items = menu_items(listing, active=None)
+    values = [value for value, _, _ in items]
+    assert values.index("qwen3-0.6b-q4f16") > values.index("big-one")
+    row = items[values.index("qwen3-0.6b-q4f16")]
+    assert row[1].startswith("Qwen3 0.6B") and "570 MB INT4" in row[2]

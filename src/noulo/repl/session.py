@@ -109,6 +109,7 @@ class ReplSession:
                 "learning": info["learning"],
                 "quantization": info["quantization"],
                 "backend": info["backend"],
+                "device": info.get("device", "cpu"),
             }
         except Unreachable:
             self.state = {"server": "offline", "model": None, "learning": None}
@@ -129,7 +130,7 @@ class ReplSession:
         server = self.state["server"]
         parts = [f"● {server}"]
         if self.state.get("model"):
-            parts.append(self.state["model"])
+            parts.append(f"{self.state['model']} on {self.state.get('device', 'cpu')}")
         if self.state.get("learning") is not None:
             parts.append(f"learning {'on' if self.state['learning'] else 'off'}")
         summary = self.context_summary()
@@ -160,6 +161,7 @@ class ReplSession:
         grid.add_row("server", Text(f"● {server}", style=color) + Text(f"  {self.api.base_url}"))
         if self.state.get("model"):
             grid.add_row("model", f"{self.state['model']} ({self.state.get('quantization', '')})")
+            grid.add_row("device", self.state.get("device", "cpu"))
             grid.add_row("learning", "on" if self.state["learning"] else "off")
         title = (
             Text("✻ ", style="bold magenta")

@@ -606,7 +606,7 @@ const pct = (x) => (x == null ? null : `${Math.round(x * 100)}%`);
 
 function modelFacts(m) {
   const rows = [
-    ["Tier", { basic: "basic", large: "larger (0.5-1 GB)",
+    ["Tier", { basic: "basic", large: "larger (0.5-1 GB)", llm: "small LLM (4-bit, next-token scoring)",
       experimental: "experimental (measured below the default; not recommended)" }[m.tier] || null],
     ["Download", m.sizeMB ? `${m.sizeMB} MB` : null],
     ["Quantisation", m.quantization],
@@ -662,7 +662,7 @@ async function loadInfo() {
     $("#info").replaceChildren(...kvPairs([
       ["Name", info.name], ["Version", info.version], ["Model", info.model],
       ["Quantization", info.quantization], ["Backend", info.backend],
-      ["Runs", info.local ? "local" : "remote"], ["Learning", learning],
+      ["Runs", info.local ? "local" : "remote"], ["Device", info.device || "cpu"], ["Learning", learning],
     ]));
   } catch (err) {
     $("#info").replaceChildren(h("dt", {}, "Error"), h("dd", {}, err.message));

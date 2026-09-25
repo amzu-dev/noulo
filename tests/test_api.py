@@ -364,3 +364,8 @@ def test_models_listing_includes_size_quantisation_tier_and_ram(tmp_path):
     assert default["sizeMB"] == 87 and default["quantization"] == "INT8"
     assert default["tier"] == "basic" and default["ramMB"] > 0
     assert any(m.get("tier") == "large" for m in models.values())
+
+
+def test_info_reports_the_device():
+    with running() as client:
+        assert client.get("/api/v1/info").json()["device"] == "cpu"

@@ -1792,6 +1792,11 @@
           "learning": {
             "type": "boolean",
             "title": "Learning"
+          },
+          "device": {
+            "type": "string",
+            "title": "Device",
+            "description": "Where the model runs: cpu, coreml, cuda, directml, rocm, remote"
           }
         },
         "type": "object",
@@ -1803,7 +1808,8 @@
           "capabilities",
           "backend",
           "local",
-          "learning"
+          "learning",
+          "device"
         ],
         "title": "InfoResponse"
       },
@@ -1885,7 +1891,7 @@
               }
             ],
             "title": "Tier",
-            "description": "basic (< 200 MB), large (0.5-1 GB) or experimental"
+            "description": "basic (< 200 MB), large (0.5-1 GB), llm (small 4-bit LLM) or experimental"
           },
           "label": {
             "anyOf": [

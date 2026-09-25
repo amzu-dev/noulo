@@ -76,7 +76,7 @@ noulo evaluate [FILE|-]              # a JSON /api/v1/evaluate request
 | `noulo model use ID` | Download if needed → save `NOULO_MODEL` → restart the managed service (or switch a manually started server live) |
 | `noulo model download [ID ...] [--missing]` | Download catalog models (default: current model + embedder) |
 | `noulo model add-endpoint --id ID --base-url URL --model NAME [--api-key-env VAR]` | Register an OpenAI-compatible endpoint |
-| `noulo model add-onnx --id ID --path DIR [--quantization Q]` | Register your own ONNX NLI model |
+| `noulo model add-onnx --id ID --path DIR [--quantization Q] [--kind nli\|llm]` | Register your own ONNX NLI model, or (`--kind llm`) a causal LLM export with a chat template |
 | `noulo model remove ID` | Remove a registered endpoint or custom model |
 
 When you choose a model in the picker:

@@ -379,3 +379,10 @@ def test_toolbar_summarises_state(api, tmp_path):
     session.handle("/noul The customer is happy.")
     bar = session.toolbar()
     assert "ready" in bar and "m" in bar and "learning on" in bar and "noul" in bar
+
+
+def test_banner_and_toolbar_show_the_device(api, tmp_path):
+    session, out = make(api, tmp_path)
+    session.startup()
+    assert "device" in out.getvalue() and "cpu" in out.getvalue()
+    assert "cpu" in session.toolbar()

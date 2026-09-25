@@ -30,6 +30,9 @@ class InfoResponse(BaseModel):
     backend: str
     local: bool
     learning: bool
+    device: str = Field(
+        description="Where the model runs: cpu, coreml, cuda, directml, rocm, remote"
+    )
 
 
 class NoulResponse(BaseModel):
@@ -61,7 +64,10 @@ class ModelEntry(BaseModel):
     local: bool
     installed: bool
     description: str
-    tier: str | None = Field(None, description="basic (< 200 MB), large (0.5-1 GB) or experimental")
+    tier: str | None = Field(
+        None,
+        description="basic (< 200 MB), large (0.5-1 GB), llm (small 4-bit LLM) or experimental",
+    )
     label: str | None = Field(None, description="Short name used in model menus")
     sizeMB: int | None = Field(None, description="Download size of the model file")
     ramMB: int | None = Field(None, description="Measured peak RAM while benchmarking")

@@ -56,6 +56,25 @@ def write_measured(model_dir: Path, result: dict[str, Any], *, machine: str) -> 
     (model_dir / "measured.json").write_text(json.dumps(data, indent=2) + "\n")
 
 
+RESULT_PREFIX = "NOULO_RESULT:"  # runtimes (e.g. CoreML) may print to stdout too
+
+
+def parse_worker_output(stdout: str) -> dict[str, Any]:
+    for line in reversed(stdout.splitlines()):
+        start = line.find(RESULT_PREFIX)
+        if start >= 0:  # runtime chatter without a newline may precede the marker
+            return json.loads(line[start + len(RESULT_PREFIX) :])
+    return {"error": "worker printed no result"}
+
+
+def model_size_bytes(model_dir: Path) -> int | None:
+    """Size of the model weights: model.onnx plus any external *.onnx_data files."""
+    graph = model_dir / "model.onnx"
+    if not graph.exists():
+        return None
+    return graph.stat().st_size + sum(f.stat().st_size for f in model_dir.glob("*.onnx_data*"))
+
+
 def _peak_rss_bytes() -> int:
     try:
         import resource
@@ -75,6 +94,7 @@ def measure(
     data_dir: Path,
     split: str = "test",
     low_memory: bool = False,
+    device: str = "cpu",
 ) -> dict[str, Any]:
     """Load one model in this process and evaluate it; returns measured metrics."""
     t_process = time.perf_counter()
@@ -90,7 +110,11 @@ def measure(
     )
 
     settings = Settings(
-        _env_file=None, models_dir=models_dir, models_file=models_file, low_memory=low_memory
+        _env_file=None,
+        models_dir=models_dir,
+        models_file=models_file,
+        low_memory=low_memory,
+        device=device,
     )
     registry = build_registry(settings)
     engine = DecisionEngine(
@@ -141,12 +165,13 @@ def measure(
     expected_scores = [r["expected_level"] / (len(r["rubric"]) - 1) for r in score_rows]
 
     engine.shutdown()
-    size_file = models_dir / model_id / "model.onnx"
+    size_bytes = model_size_bytes(models_dir / model_id)
     return {
         "model": info.id,
         "backend": info.backend,
+        "device": info.device,
         "quantization": info.quantization,
-        "modelSizeBytes": size_file.stat().st_size if size_file.exists() else None,
+        "modelSizeBytes": size_bytes,
         "peakRssBytes": _peak_rss_bytes(),
         "coldStartMs": cold_start_ms,
         "processStartMs": process_start_ms,
@@ -185,12 +210,15 @@ def _run_worker(model_id: str, args: argparse.Namespace) -> dict[str, Any]:
         cmd += ["--models-file", str(args.models_file)]
     if args.low_memory:
         cmd.append("--low-memory")
+    cmd += ["--device", args.device]
     env = {**os.environ, "PYTHONWARNINGS": "ignore"}
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         tail = (proc.stderr.strip().splitlines() or ["unknown error"])[-1]
         return {"model": model_id, "error": tail[:200]}
-    return json.loads(proc.stdout.strip().splitlines()[-1])
+    result = parse_worker_output(proc.stdout)
+    result.setdefault("model", model_id)
+    return result
 
 
 def _tune(model_id: str, args: argparse.Namespace) -> None:
@@ -236,6 +264,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument("--split", default="test", choices=["test", "calibration"])
     parser.add_argument("--low-memory", action="store_true", help="measure with NOULO_LOW_MEMORY")
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        help="cpu (default, comparable numbers), auto, gpu, coreml, cuda, ...",
+    )
     parser.add_argument("--out", type=Path, default=Path("benchmark/results"))
     parser.add_argument("--compare", type=Path, help="write a markdown comparison table here")
     parser.add_argument("--worker", help=argparse.SUPPRESS)
@@ -243,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.worker:
         print(
-            json.dumps(
+            "\n"
+            + RESULT_PREFIX
+            + json.dumps(
                 measure(
                     args.worker,
                     args.models_dir,
@@ -251,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.data_dir,
                     args.split,
                     args.low_memory,
+                    args.device,
                 )
             )
         )
@@ -289,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(result), end="\n\n")
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / f"{model_id}.json").write_text(json.dumps(result, indent=2) + "\n")
-        if not args.low_memory:  # menus show the default configuration's numbers
+        if not args.low_memory and args.device == "cpu":  # menus show CPU baseline numbers
             write_measured(Path(args.models_dir) / model_id, result, machine=machine_name())
 
     if args.compare:

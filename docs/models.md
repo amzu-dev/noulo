@@ -37,6 +37,40 @@ Choice accuracy (the small default gets 67.5%) and nearly halves the Score error
 3× the RAM and latency. All figures were measured on an Apple M1 Pro; see
 [model-comparison.md](model-comparison.md).
 
+### Small LLMs (4-bit, ~0.5–0.9 GB)
+
+Prominent open-weight LLMs, run locally on ONNX Runtime with 4-bit (INT4) weights:
+
+| Menu name | Id | Download | Quantisation | RAM (peak) | Noul | Choice | Score MAE | P50 | License |
+|---|---|---|---|---|---|---|---|---|---|
+| Qwen3 0.6B | `qwen3-0.6b-q4f16` | 570 MB | INT4 (4-bit weights, FP16 activations) | 2588 MB | 63.0% | 67.5% | 0.381 | 551 ms | Alibaba, Apache-2.0 |
+| Qwen2.5 0.5B | `qwen2.5-0.5b-q4` | 786 MB | INT4 (4-bit weights) | 2113 MB | 67.0% | 55.0% | 0.334 | 379 ms | Alibaba, Apache-2.0 |
+| Gemma 3 1B | `gemma-3-1b-q4` | 859 MB | INT4 (4-bit weights) | 1295 MB | 68.0% | 57.5% | 0.314 | 813 ms | Google, Gemma terms of use |
+| LFM2 1.2B | `lfm2-1.2b-q4` | 850 MB | INT4 (4-bit weights) | 856 MB | 85.0% | 87.5% | 0.221 | 929 ms | Liquid AI, LFM Open License |
+
+**How an LLM answers without generating anything.** noulo renders the model's own chat
+template around the same classification prompt the OpenAI-compatible backend uses. It runs
+**one forward pass** and reads the next-token probability of each label: `yes`/`no`/`unknown`
+for Noul, `A`, `B`, ... for Choice and Score, with case and leading-space variants folded
+together. There's no generation loop, so outputs stay within the contract (0–1, supplied IDs
+only). Noul calibration is fitted per model, like the NLI models. The trade-off is one
+forward pass of a 0.6–1.2B model per request: 0.4–0.9 s per call on the CPU and 0.9–2.6 GB of
+RAM.
+
+**What the measurements say:** **LFM2 1.2B** is the only one worth choosing over the NLI
+models: it has the best Choice accuracy of any model (87.5%) and good Noul accuracy (85%),
+though its raw Noul probabilities are poorly calibrated (ECE 0.28). Qwen3 0.6B, Qwen2.5 0.5B
+and Gemma 3 1B all score below the 83 MB default on Noul, Choice and Score. Small LLMs tend to
+over-use "unknown" and have letter-position biases. They're offered because you asked for
+them and because they may suit your inputs better. Measure on your own data with
+`noulo benchmark --model <id>`.
+
+MiniMax's open models are hundreds of billions of parameters, and MiniCPM and Llama 3.2 1B have
+no ONNX export that fits this size range (Llama 3.2 1B's 4-bit export is 1.1 GB). You can run
+any of them, or any GGUF model, through Ollama / llama.cpp as an
+[OpenAI-compatible endpoint](#openai-compatible-endpoints), or register your own ONNX LLM export
+(see [below](#plug-in-your-own-onnx-model)).
+
 **Why no INT8 "large" model?** Two DeBERTa-v3-*large* INT8 exports (643 MB each) are in the
 catalog as `experimental`. They're installable with `noulo model use <id>` but aren't offered
 in the menus, because dynamic INT8 quantisation measurably damages them: Noul 77% and 64%,
@@ -136,6 +170,16 @@ noulo model use my-nli
 
 `add-onnx` checks the files exist and records the absolute path in `models.json`. The path
 is never exposed through the API.
+
+**Your own ONNX LLM.** Any decoder-only export with `model.onnx` (external weight files next
+to it are fine), `tokenizer.json` and a `tokenizer_config.json` containing a chat template
+works. For example, most `onnx-community/*` repos:
+
+```bash
+noulo model add-onnx --id my-llm --path ./my-llm-q4 --kind llm --quantization INT4
+noulo benchmark --model my-llm --tune        # fits the Noul calibration
+noulo model use my-llm
+```
 
 ## `models.json`
 

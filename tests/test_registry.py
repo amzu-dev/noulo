@@ -71,7 +71,7 @@ def test_listing_never_exposes_paths_or_secrets(registry, tmp_path, monkeypatch)
 
 
 def test_listing_only_includes_decision_models_not_embedders(registry):
-    assert all(m["backend"] in ("onnx-nli", "openai") for m in registry.list())
+    assert all(m["backend"] in ("onnx-nli", "onnx-llm", "openai") for m in registry.list())
 
 
 # ---------------------------------------------------------------- openai endpoints
@@ -395,3 +395,115 @@ def test_registry_passes_low_memory_to_nli_models(tmp_path):
     install_fake(tmp_path / "models", "nli-mobilebert-int8")
     registry.load_backend("nli-mobilebert-int8")
     assert opened["low_memory"] is True
+
+
+# ---------------------------------------------------------------- local LLMs
+
+
+LLM_IDS = ("qwen3-0.6b-q4f16", "qwen2.5-0.5b-q4", "gemma-3-1b-q4", "lfm2-1.2b-q4")
+
+
+def test_catalog_offers_prominent_small_llms_highly_quantised():
+    entries = {e.id: e for e in CATALOG}
+    for model_id in LLM_IDS:
+        entry = entries[model_id]
+        assert entry.kind == "llm" and entry.tier == "llm"
+        assert entry.quantization == "INT4" and 450 <= entry.size_mb <= 900
+
+
+def test_llm_download_keeps_external_weight_file_names(registry, tmp_path):
+    files = {
+        "model_q4.onnx": b"graph",
+        "model_q4.onnx_data": b"weights",
+        "tokenizer.json": b"{}",
+        "tokenizer_config.json": b"{}",
+        "config.json": b"{}",
+    }
+    path = registry.download("gemma-3-1b-q4", fetch=fake_fetch(files))
+    assert (path / "model.onnx").read_bytes() == b"graph"
+    assert (path / "model_q4.onnx_data").read_bytes() == b"weights"
+    assert (path / "tokenizer_config.json").exists()
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert manifest["sizeBytes"] == len(b"graph") + len(b"weights")
+
+
+def install_fake_llm(models_dir, model_id, data_file=None):
+    d = models_dir / model_id
+    d.mkdir(parents=True)
+    for name in ("model.onnx", "tokenizer.json", "tokenizer_config.json", "config.json"):
+        (d / name).write_text("{}")
+    if data_file:
+        (d / data_file).write_text("{}")
+    return d
+
+
+def test_llm_listing_and_loading(tmp_path):
+    from noulo.inference.llm_backend import LlmBackend
+
+    class FakeLM:
+        def label_distribution(self, messages, labels):
+            return [1 / len(labels)] * len(labels), 1.0
+
+        def close(self):
+            pass
+
+    registry = ModelRegistry(tmp_path / "models", None, open_llm=lambda *a, **k: FakeLM())
+    assert not {m["id"]: m for m in registry.list()}["gemma-3-1b-q4"]["installed"]
+    install_fake_llm(tmp_path / "models", "gemma-3-1b-q4", "model_q4.onnx_data")
+    entry = {m["id"]: m for m in registry.list()}["gemma-3-1b-q4"]
+    assert entry["installed"] and entry["backend"] == "onnx-llm" and entry["tier"] == "llm"
+    backend = registry.load_backend("gemma-3-1b-q4")
+    assert isinstance(backend, LlmBackend) and backend.info.quantization == "INT4"
+
+
+def test_llm_without_its_external_weights_is_not_installed(tmp_path):
+    registry = ModelRegistry(tmp_path / "models", None)
+    install_fake_llm(tmp_path / "models", "gemma-3-1b-q4")  # data file missing
+    assert not {m["id"]: m for m in registry.list()}["gemma-3-1b-q4"]["installed"]
+
+
+def test_register_your_own_onnx_llm(tmp_path):
+    from noulo.inference.llm_backend import LlmBackend
+
+    class FakeLM:
+        def close(self):
+            pass
+
+    registry = ModelRegistry(
+        tmp_path / "models", tmp_path / "models.json", open_llm=lambda *a, **k: FakeLM()
+    )
+    custom = install_fake_llm(tmp_path / "elsewhere", "my-llm")
+    registry.register_onnx(id="my-llm", path=custom, quantization="INT4", kind="llm")
+    entry = {m["id"]: m for m in registry.list()}["my-llm"]
+    assert entry["backend"] == "onnx-llm" and entry["installed"]
+    assert isinstance(registry.load_backend("my-llm"), LlmBackend)
+
+
+def test_register_onnx_llm_requires_chat_template_config(registry, tmp_path):
+    custom = install_fake(tmp_path / "elsewhere", "nli-like")  # no tokenizer_config.json
+    with pytest.raises(ValueError, match="tokenizer_config.json"):
+        registry.register_onnx(id="x", path=custom, kind="llm")
+
+
+# ---------------------------------------------------------------- devices
+
+
+def test_registry_resolves_a_placement_per_model_and_passes_it_to_the_loader(tmp_path):
+    seen = {}
+
+    def opener(model_dir, **kwargs):
+        seen.update(kwargs)
+        model = RecordingNliModel()
+        model.device = kwargs["placement"].device
+        return model
+
+    registry = ModelRegistry(tmp_path / "models", None, open_nli_model=opener, device="cpu")
+    install_fake(tmp_path / "models", "nli-mobilebert-int8")
+    backend = registry.load_backend("nli-mobilebert-int8")
+    assert seen["placement"].device == "cpu"
+    assert backend.info.device == "cpu"
+
+
+def test_unknown_device_setting_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="device"):
+        ModelRegistry(tmp_path / "models", None, device="tpu")

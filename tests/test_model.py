@@ -141,3 +141,36 @@ def test_default_mode_keeps_all_optimisations(monkeypatch):
     seen = _capture_session(monkeypatch)
     OnnxNliModel(DEFAULT_NLI_MODEL_DIR).close()
     assert not seen.get("disabled_optimizers")
+
+
+def _coreml_available():
+    import onnxruntime as ort
+
+    return "CoreMLExecutionProvider" in ort.get_available_providers()
+
+
+@pytest.mark.model
+def test_models_run_on_cpu_by_default(real_nli_model):
+    assert real_nli_model.device == "cpu"
+
+
+@pytest.mark.model
+@pytest.mark.skipif(not _coreml_available(), reason="CoreML not available")
+def test_coreml_placement_matches_cpu_predictions(real_nli_model):
+    from noulo.inference.devices import resolve
+    from tests.conftest import DEFAULT_NLI_MODEL_DIR
+
+    placement = resolve(
+        "coreml", available=["CoreMLExecutionProvider", "CPUExecutionProvider"], precision="INT8"
+    )
+    gpu = OnnxNliModel(DEFAULT_NLI_MODEL_DIR, placement=placement)
+    pairs = [
+        (PREMISE, "The customer reports being charged more than once."),
+        (PREMISE, "The customer has never been charged."),
+    ]
+    assert gpu.device == "coreml"
+    np.testing.assert_array_equal(
+        gpu.predict_logits(pairs).argmax(axis=1),
+        real_nli_model.predict_logits(pairs).argmax(axis=1),
+    )
+    gpu.close()

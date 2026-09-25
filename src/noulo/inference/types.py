@@ -37,10 +37,11 @@ class BackendInfo:
     """Public, non-sensitive description of a backend. Never contains paths or secrets."""
 
     id: str
-    backend: Literal["onnx-nli", "openai"]
+    backend: Literal["onnx-nli", "onnx-llm", "openai"]
     model: str
     quantization: str
     local: bool
+    device: str = "cpu"  # where it runs: cpu, coreml, cuda, directml, rocm, or remote
 
 
 @runtime_checkable

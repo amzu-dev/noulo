@@ -61,6 +61,9 @@ B) Your own ONNX NLI / zero-shot classifier (runs fully local on CPU):
    'entailment' label in id2label). Then:
 
    noulo model add-onnx --id my-nli --path ./my-nli-int8 --quantization INT8
+   # a causal LLM export (model.onnx + tokenizer.json + tokenizer_config.json with a chat
+   # template, e.g. from onnx-community) works too:
+   noulo model add-onnx --id my-llm --path ./my-llm-q4 --kind llm --quantization INT4
    noulo benchmark --model my-nli --tune      # fits templates + calibration
    noulo model use my-nli
 
@@ -319,6 +322,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--id", required=True)
     p.add_argument("--path", required=True, help="dir with model.onnx, tokenizer.json, config.json")
     p.add_argument("--quantization", default="unknown")
+    p.add_argument(
+        "--kind",
+        choices=["nli", "llm"],
+        default="nli",
+        help="nli: NLI/zero-shot classifier; llm: causal LLM export with a chat template",
+    )
     p = msub.add_parser("remove", help="remove a registered endpoint or custom model")
     p.add_argument("id")
 
@@ -557,7 +566,8 @@ class Cli:
                 data, _ = self.api().call("GET", "/api/v1/info")
                 self.print(
                     f"model: {data['model']} ({data['backend']}, {data['quantization']}), "
-                    f"learning: {'on' if data['learning'] else 'off'}"
+                    f"learning: {'on' if data['learning'] else 'off'}, "
+                    f"device: {data.get('device', 'cpu')}"
                 )
             except CliError:
                 pass
@@ -727,7 +737,10 @@ class Cli:
                 )
             elif action == "add-onnx":
                 self.registry().register_onnx(
-                    id=self.args.id, path=self.args.path, quantization=self.args.quantization
+                    id=self.args.id,
+                    path=self.args.path,
+                    quantization=self.args.quantization,
+                    kind=self.args.kind,
                 )
             elif action == "remove":
                 self.registry().unregister(self.args.id)

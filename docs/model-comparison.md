@@ -45,6 +45,15 @@ noulo benchmark --all --download --tune --compare benchmark/results/comparison.m
 | nli-deberta-v3-large-int8 *(experimental)* | INT8 | 613 MiB | 1001 MiB | 2.45 s | 65.0% | 77.0% | 0.089 | 0.227 | 47.4 ms | 208 ms |
 | nli-deberta-v3-large-anli-int8 *(experimental)* | INT8 | 613 MiB | 1435 MiB | 2.99 s | 57.5% | 64.0% | 0.071 | 0.271 | 53.7 ms | 178 ms |
 
+### Small LLMs (4-bit, next-token scoring)
+
+| Model | Quant | Size | Peak RAM¹ | Cold start | Choice acc | Noul acc | Noul ECE | Score MAE | P50 | P95 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| qwen3-0.6b-q4f16 | INT4 | 543 MiB | 2588 MiB | 3.56 s | 67.5% | 63.0% | 0.077 | 0.381 | 551 ms | 680 ms |
+| qwen2.5-0.5b-q4 | INT4 | 750 MiB | 2113 MiB | 3.11 s | 55.0% | 67.0% | 0.117 | 0.334 | 379 ms | 496 ms |
+| gemma-3-1b-q4 | INT4 | 820 MiB | 1295 MiB | 3.44 s | 57.5% | 68.0% | 0.179 | 0.314 | 813 ms | 1053 ms |
+| lfm2-1.2b-q4 | INT4 | 811 MiB | 856 MiB | 3.42 s | 87.5% | 85.0% | 0.281 | 0.221 | 929 ms | 1113 ms |
+
 ¹ Peak RSS of the benchmark process, which loads the model and runs every test item,
 including long inputs that grow ONNX Runtime's memory arena. A running server with the
 default model, the learning embedder and the API measured about **500 MiB RSS** (end-to-end
@@ -96,7 +105,12 @@ candidate in one batch, so they cost more than Noul.
    83 MB default (Noul 77% and 64%). Dynamic INT8 quantisation evidently damages these large
    models, so they are marked `experimental` and not offered in the menus. A large model at
    FP16/FP32 (1.7 GB or more) would exceed the 1 GB tier.
-6. **The tiny extreme:** xtremedistil (12.5 MB, 116 MiB, 1.6 ms) is attractive for very
+6. **Small LLMs aren't a shortcut to accuracy.** Scored by next-token probability, the 4-bit
+   Qwen3 0.6B, Qwen2.5 0.5B and Gemma 3 1B land *below* the 83 MB NLI default on every task,
+   at 50–100× the latency and 3–6× the RAM. Liquid's **LFM2 1.2B** is the exception on Choice
+   (87.5%, the best of all models) with good Noul accuracy (85%), but it's poorly calibrated
+   (ECE 0.28) and takes ~0.9 s per call.
+7. **The tiny extreme:** xtremedistil (12.5 MB, 116 MiB, 1.6 ms) is attractive for very
    constrained devices, but 69% Noul accuracy is too low for a general default.
 
 ## Menu choices (`noulo model`)

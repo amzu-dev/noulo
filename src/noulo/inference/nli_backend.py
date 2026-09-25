@@ -79,7 +79,12 @@ class NliBackend:
             score_template, score_method, score_premise, score_temperature
         )
         self.info = BackendInfo(
-            id=model_id, backend="onnx-nli", model=model_id, quantization=quantization, local=True
+            id=model_id,
+            backend="onnx-nli",
+            model=model_id,
+            quantization=quantization,
+            local=True,
+            device=getattr(model, "device", "cpu"),
         )
 
     def _candidate_distribution(

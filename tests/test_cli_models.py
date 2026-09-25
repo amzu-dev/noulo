@@ -332,3 +332,32 @@ def test_download_missing_only_fetches_absent_default_models(env_file):
     )
     assert code == 0 and registry.downloads == ["nli-minilm2-l6-int8"]
     assert "already installed: minilm-l6-v2-int8" in out
+
+
+def test_model_add_onnx_llm_kind(env_file, tmp_path):
+    registry = FakeRegistry()
+    code, _, _ = run(
+        [
+            "model",
+            "add-onnx",
+            "--id",
+            "my-llm",
+            "--path",
+            str(tmp_path),
+            "--kind",
+            "llm",
+            "--quantization",
+            "INT4",
+        ],
+        env_file=env_file,
+        registry=registry,
+        service=FakeService(),
+    )
+    assert code == 0 and registry.registered[0]["kind"] == "llm"
+
+
+def test_status_shows_model_and_device(learning_api, env_file):
+    code, out, _ = run(
+        ["status"], api=learning_api, env_file=env_file, service=FakeService(running=True)
+    )
+    assert code == 0 and "device: cpu" in out
