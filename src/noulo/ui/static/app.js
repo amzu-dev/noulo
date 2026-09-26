@@ -1,31 +1,10 @@
 import { api, ApiError, getApiKey, setApiKey } from "./api.js";
+import { DEFAULT_RUBRIC, EXAMPLES } from "./examples.js";
 
 // ---------------------------------------------------------------- constants
 
-const DEFAULT_RUBRIC = ["insignificant", "low", "medium", "high", "critical"];
 const LIMITS = { options: 20, rubricMin: 2, rubric: 11 };
 const HEALTH_INTERVAL_MS = 5000;
-
-const EXAMPLES = {
-  noul: () => ({
-    input: "I checked my account and you have taken the subscription payment twice.",
-    proposition: "The customer reports being charged more than once.",
-  }),
-  choice: () => ({
-    input: "The customer says their subscription payment was taken twice.",
-    question: "Which department should handle this?",
-    options: [
-      { id: "A", text: "Billing" },
-      { id: "B", text: "Technical Support" },
-      { id: "C", text: "Sales" },
-    ],
-  }),
-  score: () => ({
-    input: "The production system is unavailable for every customer.",
-    question: "How severe is this incident?",
-    rubric: [...DEFAULT_RUBRIC],
-  }),
-};
 
 const HINTS = {
   noul: "How likely is the proposition true, given the input? Returns a value from 0 to 1.",

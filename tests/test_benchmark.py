@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -21,6 +22,37 @@ def test_accuracy():
 
 def test_accuracy_of_nothing_is_nan():
     assert np.isnan(accuracy([], []))
+
+
+@pytest.mark.parametrize(
+    ("predicted", "expected", "summary"),
+    [
+        (
+            ["billing", "sales", "sales", "sales"],
+            ["billing", "billing", "sales", "billing"],
+            {
+                "correct": 2,
+                "total": 4,
+                "confusion": {"billing": {"billing": 1, "sales": 2}, "sales": {"sales": 1}},
+            },
+        ),
+        ([], [], {"correct": 0, "total": 0, "confusion": {}}),
+    ],
+)
+def test_choice_summary_counts_correct_total_and_expected_to_predicted_ids(
+    predicted, expected, summary
+):
+    from noulo.benchmark import metrics
+
+    assert metrics.choice_summary(predicted, expected) == summary
+
+
+@pytest.mark.parametrize("predicted, expected", [(["A"], []), ([], ["A"])])
+def test_choice_summary_rejects_mismatched_prediction_counts(predicted, expected):
+    from noulo.benchmark.metrics import choice_summary
+
+    with pytest.raises(ValueError, match="same length"):
+        choice_summary(predicted, expected)
 
 
 def test_brier_score_perfect_and_worst():
@@ -160,6 +192,185 @@ def test_low_memory_runs_do_not_overwrite_default_measurements(tmp_path, monkeyp
     assert written == []
     run.main(args)
     assert len(written) == 1
+
+
+@pytest.fixture
+def choice_benchmark(tmp_path, monkeypatch):
+    from noulo import runtime
+    from noulo.inference.calibration import IdentityCalibrator
+    from tests.fakes import FakeBackend, FakeLoader
+
+    backend = FakeBackend(choice_probs=[0.25, 0.75])
+    registry = SimpleNamespace(
+        load_backend=FakeLoader(**{"fake-model": backend}),
+        load_calibrator=lambda _: IdentityCalibrator(),
+        list=lambda: [{"id": "fake-model", "installed": True}],
+    )
+    monkeypatch.setattr(runtime, "build_registry", lambda _: registry)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    choices = [
+        {"id": "route/billing", "text": "private billing option"},
+        {"id": "route/sales", "text": "private sales option"},
+    ]
+    rows = [
+        {
+            "id": id,
+            "split": split,
+            "input": "private customer message",
+            "question": "private routing question",
+            "choices": choices,
+            "answer": answer,
+        }
+        for id, split, answer in [
+            ("right", "test", "route/sales"),
+            ("wrong", "test", "route/billing"),
+            ("calibration-only", "calibration", "route/billing"),
+        ]
+    ]
+    (data_dir / "choice.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    for name in ("noul", "score"):
+        (data_dir / f"{name}.jsonl").write_text("")
+    return data_dir, backend
+
+
+def test_choice_benchmark_accepts_legacy_examples_without_ids(choice_benchmark, tmp_path):
+    from noulo.benchmark.run import measure
+
+    data_dir, _ = choice_benchmark
+    path = data_dir / "choice.jsonl"
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    for row in rows:
+        row.pop("id")
+    path.write_text("\n".join(json.dumps(row) for row in rows))
+    result = measure("fake-model", tmp_path / "models", None, data_dir)
+    assert [row["id"] for row in result["choicePredictions"]] == [None, None]
+    assert result["choiceSummary"]["total"] == 2
+
+
+@pytest.mark.parametrize("entry", ["measure", "worker", "main"])
+@pytest.mark.parametrize("split", ["test", "calibration"])
+def test_choice_benchmark_json_has_text_free_predictions_and_counts(
+    choice_benchmark, tmp_path, monkeypatch, capsys, entry, split
+):
+    from noulo.benchmark import run
+
+    data_dir, backend = choice_benchmark
+    models_dir = tmp_path / "models"
+    out = tmp_path / "results"
+    args = [
+        "--models-dir",
+        str(models_dir),
+        "--data-dir",
+        str(data_dir),
+        "--split",
+        split,
+        "--out",
+        str(out),
+    ]
+    if entry == "measure":
+        result = run.measure("fake-model", models_dir, None, data_dir, split=split)
+    elif entry == "worker":
+        assert run.main([*args, "--worker", "fake-model"]) == 0
+        result = run.parse_worker_output(capsys.readouterr().out)
+    else:
+        monkeypatch.setattr(
+            run,
+            "_run_worker",
+            lambda model_id, args: run.measure(
+                model_id, args.models_dir, args.models_file, args.data_dir, args.split
+            ),
+        )
+        assert run.main([*args, "--model", "fake-model"]) == 0
+        result = json.loads((out / "fake-model.json").read_text())
+
+    expected_items = (
+        [("right", "route/sales", True), ("wrong", "route/billing", False)]
+        if split == "test"
+        else [("calibration-only", "route/billing", False)]
+    )
+    assert result["choicePredictions"] == [
+        {
+            "id": id,
+            "expectedId": expected,
+            "predictedId": "route/sales",
+            "correct": correct,
+            "probabilities": {"route/billing": 0.25, "route/sales": 0.75},
+        }
+        for id, expected, correct in expected_items
+    ]
+    confusion = {"route/billing": {"route/sales": 1}}
+    if split == "test":
+        confusion["route/sales"] = {"route/sales": 1}
+    assert result["choiceSummary"] == {
+        "correct": int(split == "test"),
+        "total": len(expected_items),
+        "confusion": confusion,
+    }
+    assert result["choiceAccuracy"] == (0.5 if split == "test" else 0.0)
+    assert result["items"]["choice"] == len(expected_items)
+    assert result["split"] == split
+    assert "private" not in json.dumps(result)
+    assert backend.calls == len(expected_items)
+    assert backend.warmed and backend.closed
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize(
+    ("dataset", "split", "mode", "should_write"),
+    [
+        ("default", "test", [], True),
+        ("absolute-default", "test", [], True),
+        ("default", "calibration", [], False),
+        ("custom", "test", [], False),
+        ("custom", "calibration", [], False),
+        ("default", "test", ["--device", "coreml"], False),
+        ("default", "test", ["--low-memory"], False),
+    ],
+)
+def test_generic_measurements_only_written_for_bundled_test_cpu_baseline(
+    choice_benchmark, tmp_path, monkeypatch, existing, dataset, split, mode, should_write
+):
+    from noulo.benchmark import run
+
+    data_dir, _ = choice_benchmark
+    result = {"model": "fake-model", "choiceAccuracy": 0.5, "split": split}
+    monkeypatch.setattr(run, "_run_worker", lambda model_id, args: result)
+    monkeypatch.setattr(run, "machine_name", lambda: "test machine")
+    models_dir = tmp_path / "models"
+    measured = models_dir / "fake-model" / "measured.json"
+    original = '{"choiceAccuracy": 0.9, "machine": "existing baseline"}\n'
+    if existing:
+        measured.parent.mkdir(parents=True)
+        measured.write_text(original)
+    out = tmp_path / "results"
+    args = [
+        "--model",
+        "fake-model",
+        "--models-dir",
+        str(models_dir),
+        "--out",
+        str(out),
+        "--split",
+        split,
+        *mode,
+    ]
+    if dataset == "absolute-default":
+        args += ["--data-dir", str(run.DEFAULT_DATA_DIR.resolve())]
+    elif dataset == "custom":
+        args += ["--data-dir", str(data_dir)]
+
+    assert run.main(args) == 0
+    assert json.loads((out / "fake-model.json").read_text()) == result
+    if should_write:
+        assert json.loads(measured.read_text()) == {
+            "choiceAccuracy": 0.5,
+            "machine": "test machine",
+        }
+    elif existing:
+        assert measured.read_text() == original
+    else:
+        assert not measured.exists()
 
 
 def test_model_size_includes_external_weight_files(tmp_path):

@@ -104,6 +104,7 @@ def measure(
     from .metrics import (
         accuracy,
         brier_score,
+        choice_summary,
         expected_calibration_error,
         mean_absolute_error,
         percentile_ms,
@@ -153,12 +154,28 @@ def measure(
     ]
 
     choice_rows = load_dataset(data_dir / "choice.jsonl", split=split)
-    chosen = [
-        timed(
-            engine.choice, r["input"], r["question"], [ChoiceOption(**c) for c in r["choices"]]
-        ).value
-        for r in choice_rows
-    ]
+    choice_predictions = []
+    for r in choice_rows:
+        result = timed(
+            engine.choice,
+            r["input"],
+            r["question"],
+            [ChoiceOption(**c) for c in r["choices"]],
+            diagnostics=True,
+        )
+        assert result.diagnostics is not None  # requested above; engine guarantees this
+        # Explicitly allowlist audit fields: never persist input/question/option text.
+        choice_predictions.append(
+            {
+                "id": r.get("id"),  # legacy custom datasets may not have item IDs
+                "expectedId": r["answer"],
+                "predictedId": result.value,
+                "correct": result.value == r["answer"],
+                "probabilities": result.diagnostics["probabilities"],
+            }
+        )
+    chosen = [p["predictedId"] for p in choice_predictions]
+    expected_choices = [r["answer"] for r in choice_rows]
 
     score_rows = load_dataset(data_dir / "score.jsonl", split=split)
     scores = [timed(engine.score, r["input"], r["question"], r["rubric"]).value for r in score_rows]
@@ -175,7 +192,9 @@ def measure(
         "peakRssBytes": _peak_rss_bytes(),
         "coldStartMs": cold_start_ms,
         "processStartMs": process_start_ms,
-        "choiceAccuracy": accuracy(chosen, [r["answer"] for r in choice_rows]),
+        "choiceAccuracy": accuracy(chosen, expected_choices),
+        "choiceSummary": choice_summary(chosen, expected_choices),
+        "choicePredictions": choice_predictions,
         "noulAccuracy": accuracy([v >= 0.5 for v in values], [bool(y) for y in labels]),
         "noulEce": expected_calibration_error(values, labels),
         "noulBrier": brier_score(values, labels),
@@ -325,7 +344,12 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(result), end="\n\n")
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / f"{model_id}.json").write_text(json.dumps(result, indent=2) + "\n")
-        if not args.low_memory and args.device == "cpu":  # menus show CPU baseline numbers
+        if (
+            not args.low_memory
+            and args.device == "cpu"
+            and args.split == "test"
+            and args.data_dir.resolve() == DEFAULT_DATA_DIR.resolve()
+        ):  # menus show only the bundled test split's CPU baseline numbers
             write_measured(Path(args.models_dir) / model_id, result, machine=machine_name())
 
     if args.compare:

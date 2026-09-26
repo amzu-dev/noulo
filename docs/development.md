@@ -23,7 +23,9 @@ uv run pytest -k learning
 | `slow` | End-to-end: starts a real background server with the CLI and drives it through subprocesses |
 
 Remote vector-store contract tests run when `NOULO_TEST_QDRANT_URL` / `NOULO_TEST_CHROMA_URL`
-point at live servers.
+point at live servers. `test_ui_routing_examples.py` also needs Node on PATH to evaluate
+`ui/static/examples.js`; it skips on Python-only installations. It runs the real default
+model against the same Choice definitions used by the browser, with learning disabled.
 
 What is covered:
 

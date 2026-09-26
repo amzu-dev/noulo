@@ -88,7 +88,7 @@ class MemoryConfig:
     top_k: int = 8
     min_similarity: float = 0.80
     feedback_weight: float = 1.0
-    observed_weight: float = 0.25
+    observed_weight: float = 0.0
     max_influence: float = 0.9
     prior_strength: float = 0.5
 
@@ -205,18 +205,43 @@ class LearningMemory:
         return True
 
     def recall(self, *, primitive: Primitive, task: str, input: str) -> list[Recollection]:
-        """Most similar past cases for the same primitive, task and embedder."""
+        """Most similar positive-weight cases for the same task and embedder.
+
+        Keep the generic store API: expand the search prefix until top_k usable
+        cases or exhaustion, bounded by the stored count. Unlike a fixed
+        overfetch factor this cannot let zero-weight cases crowd out evidence.
+        Usually one search suffices; sparse feedback may require O(log N)
+        searches and O(N) returned records (and repeated backend search work).
+        """
+        top_k = self.config.top_k
+        if top_k <= 0 or (self.config.observed_weight <= 0 and self.config.feedback_weight <= 0):
+            return []
         query = self._embed(input)
         with self._lock:
-            matches = self.store.search(
-                primitive=primitive,
-                task=task,
-                embedder_id=self.embedder.id,
-                vector=query,
-                top_k=self.config.top_k,
-                min_similarity=self.config.min_similarity,
-            )
-        return [_recollection(record, similarity) for record, similarity in matches]
+            limit, total = top_k, None
+            while True:
+                matches = self.store.search(
+                    primitive=primitive,
+                    task=task,
+                    embedder_id=self.embedder.id,
+                    vector=query,
+                    top_k=limit,
+                    min_similarity=self.config.min_similarity,
+                )
+                usable = [
+                    r
+                    for record, similarity in matches
+                    if self._weight(r := _recollection(record, similarity)) > 0
+                ]
+                if len(usable) >= top_k or len(matches) < limit:
+                    return usable[:top_k]
+                # Count only when expansion is needed. Snapshot under our lock
+                # also bounds retries if another client writes to a remote store.
+                if total is None:
+                    total = self.store.count()["records"]
+                if limit >= total:
+                    return usable[:top_k]
+                limit = min(total, limit * 2)
 
     def blend_scalar(
         self, model_value: float, recollections: Sequence[Recollection]

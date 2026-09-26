@@ -13,6 +13,23 @@ def accuracy(predicted: Sequence, expected: Sequence) -> float:
     return float(np.mean([p == e for p, e in zip(predicted, expected)]))
 
 
+def choice_summary(predicted: Sequence[str], expected: Sequence[str]) -> dict:
+    """Counts plus sparse confusion[expected_id][predicted_id] over literal IDs.
+
+    IDs can mean different things across tasks; these counts do not infer shared
+    semantic labels. Unobserved pairs are omitted, rather than stored as zeros.
+    """
+    if len(predicted) != len(expected):
+        raise ValueError("Choice predictions and expected IDs must have the same length.")
+    confusion: dict[str, dict[str, int]] = {}
+    correct = 0
+    for prediction, target in zip(predicted, expected):
+        counts = confusion.setdefault(target, {})
+        counts[prediction] = counts.get(prediction, 0) + 1
+        correct += prediction == target
+    return {"correct": correct, "total": len(expected), "confusion": confusion}
+
+
 def brier_score(probs: Sequence[float], labels: Sequence[float]) -> float:
     p, y = np.asarray(probs, float), np.asarray(labels, float)
     return float(np.mean((p - y) ** 2)) if p.size else float("nan")

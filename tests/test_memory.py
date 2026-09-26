@@ -2,6 +2,7 @@ import json
 import threading
 from datetime import datetime, timedelta
 
+import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -112,7 +113,8 @@ def mem(make_memory):
     return make_memory()
 
 
-def test_record_then_recall_returns_observed_neighbour(mem):
+def test_record_then_recall_returns_observed_neighbour(make_memory):
+    mem = make_memory(MemoryConfig(observed_weight=0.25))
     rid = mem.record(primitive="noul", task=NOUL_TASK, input=INVOICE, model_id="m1", value=0.9)
     [hit] = mem.recall(primitive="noul", task=NOUL_TASK, input=INVOICE)
     assert hit.record_id == rid
@@ -123,13 +125,13 @@ def test_record_then_recall_returns_observed_neighbour(mem):
 
 
 def test_recall_ignores_inputs_below_min_similarity(mem):
-    mem.record(primitive="noul", task=NOUL_TASK, input=INVOICE, model_id="m1", value=0.9)
+    mem.teach(primitive="noul", task=NOUL_TASK, input=INVOICE, value=0.9)
     unrelated = "The quarterly marketing offsite moves to the lake house in June."
     assert mem.recall(primitive="noul", task=NOUL_TASK, input=unrelated) == []
 
 
 def test_recall_is_isolated_by_task_and_primitive(mem):
-    mem.record(primitive="noul", task=NOUL_TASK, input=INVOICE, model_id="m1", value=0.9)
+    mem.teach(primitive="noul", task=NOUL_TASK, input=INVOICE, value=0.9)
     other_task = task_key("noul", proposition="The customer is angry")
     assert mem.recall(primitive="noul", task=other_task, input=INVOICE) == []
     assert mem.recall(primitive="score", task=NOUL_TASK, input=INVOICE) == []
@@ -137,15 +139,147 @@ def test_recall_is_isolated_by_task_and_primitive(mem):
 
 def test_recall_ignores_rows_from_a_different_embedder(make_memory):
     first = make_memory(embedder=HashingEmbedder(dim=64), persistent=True)
-    first.record(primitive="noul", task=NOUL_TASK, input=INVOICE, model_id="m1", value=0.9)
+    first.teach(primitive="noul", task=NOUL_TASK, input=INVOICE, value=0.9)
     first.close()
 
     second = make_memory(embedder=HashingEmbedder(dim=128), persistent=True)
     assert second.recall(primitive="noul", task=NOUL_TASK, input=INVOICE) == []
 
 
+class RankedEmbedder:
+    """Numeric inputs give distinct, predictable cosine ranks against input '0'."""
+
+    id = "ranked-2"
+    dim = 2
+
+    def embed(self, texts):
+        return np.asarray([[1.0, float(text)] for text in texts], dtype=np.float32)
+
+    def close(self):
+        pass
+
+
+@pytest.mark.parametrize("primitive", ["noul", "score", "choice"])
+@pytest.mark.parametrize(
+    ("observed_weight", "feedback_weight", "closer_verified"),
+    [
+        pytest.param(0.0, 1.0, False, id="verified-only"),
+        pytest.param(-0.25, 1.0, False, id="negative-observed"),
+        pytest.param(0.25, 0.0, True, id="observed-only"),
+        pytest.param(0.25, -1.0, True, id="negative-feedback"),
+        pytest.param(0.25, 1.0, False, id="both-enabled"),
+        pytest.param(0.0, 0.0, False, id="both-disabled"),
+    ],
+)
+def test_recall_excludes_zero_weight_records_before_top_k(
+    make_memory, primitive, observed_weight, feedback_weight, closer_verified
+):
+    config = MemoryConfig(top_k=2, observed_weight=observed_weight, feedback_weight=feedback_weight)
+    memory = make_memory(config, embedder=RankedEmbedder())
+    wrong = {"choice_id": "billing"} if primitive == "choice" else {"value": 0.9}
+    correct = {"choice_id": "it"} if primitive == "choice" else {"value": 0.0}
+    # Many more than top_k closer, distinct cases: a fixed overfetch factor is
+    # not sufficient. Verified rows also retain their original observed outcome.
+    closer = []
+    for i in range(33):
+        rid = memory.record(
+            primitive=primitive, task="t", input=str(i / 100), model_id="m1", **wrong
+        )
+        if closer_verified:
+            memory.feedback(rid, **wrong)
+        closer.append(rid)
+    farther = []
+    for text in ("0.4", "0.5", "0.6"):
+        if closer_verified:
+            rid = memory.record(primitive=primitive, task="t", input=text, model_id="m1", **correct)
+        else:
+            rid = memory.teach(primitive=primitive, task="t", input=text, **correct)
+        farther.append(rid)
+    before = memory.records(limit=100)
+    hits = memory.recall(primitive=primitive, task="t", input="0")
+    if observed_weight > 0 and feedback_weight > 0:
+        expected = closer[: config.top_k]
+    elif observed_weight <= 0 and feedback_weight <= 0:
+        expected = []
+    else:
+        expected = farther[: config.top_k]
+    assert [hit.record_id for hit in hits] == expected
+    assert all(a.similarity > b.similarity for a, b in zip(hits, hits[1:]))
+    if primitive == "choice":
+        blended, adjustment = memory.blend_distribution([0.9, 0.1], ["billing", "it"], hits)
+        corrected = blended[1] > 0.1
+    else:
+        blended, adjustment = memory.blend_scalar(0.9, hits)
+        corrected = blended < 0.9
+    assert adjustment.matches == len(expected)
+    assert adjustment.applied == bool(expected)
+    if expected == farther[: config.top_k]:
+        assert corrected
+    # Retrieval must not mutate or delete observations; feedback remains possible.
+    assert memory.records(limit=100) == before
+    assert memory.stats()["records"] == len(closer) + len(farther)
+    assert memory.feedback(closer[-1], **correct)
+
+
+@pytest.mark.parametrize("eligible", [False, True])
+@pytest.mark.parametrize("filtered_tail", [False, True])
+def test_recall_expansion_is_bounded_and_stops_on_exhaustion(
+    make_memory, monkeypatch, eligible, filtered_tail
+):
+    memory = make_memory(MemoryConfig(top_k=2), embedder=RankedEmbedder())
+    for i in range(17):
+        memory.record(primitive="noul", task="t", input=str(i / 100), model_id="m1", value=0.9)
+    expected = []
+    if eligible:
+        expected.append(memory.teach(primitive="noul", task="t", input="0.4", value=0.0))
+    if filtered_tail:
+        # Neither other-task cases nor same-task cases below the similarity
+        # threshold should keep expanding the query to the global store count.
+        for i in range(40):
+            memory.teach(primitive="noul", task="other", input=str(i), value=0.0)
+            memory.teach(primitive="noul", task="t", input=str(i + 2), value=0.0)
+    total = memory.stats()["records"]
+    search, count = memory.store.search, memory.store.count
+    limits, counts = [], []
+
+    # Preserve the original store signature: no new filter/pagination keyword
+    # may be required from existing custom VectorStore implementations.
+    def checked_search(*, primitive, task, embedder_id, vector, top_k, min_similarity):
+        assert 0 < top_k <= total
+        assert not limits or top_k > limits[-1]
+        limits.append(top_k)
+        assert len(limits) <= total.bit_length() + 1
+        return search(
+            primitive=primitive,
+            task=task,
+            embedder_id=embedder_id,
+            vector=vector,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+
+    def checked_count():
+        counts.append(True)
+        assert len(counts) == 1
+        return count()
+
+    monkeypatch.setattr(memory.store, "search", checked_search)
+    monkeypatch.setattr(memory.store, "count", checked_count)
+    hits = memory.recall(primitive="noul", task="t", input="0")
+    assert [hit.record_id for hit in hits] == expected
+    assert len(limits) > 1
+    assert (limits[-1] < total) if filtered_tail else (limits[-1] == total)
+
+
+@pytest.mark.parametrize("top_k", [0, -1])
+def test_recall_with_nonpositive_top_k_returns_no_records(make_memory, top_k):
+    memory = make_memory(MemoryConfig(top_k=top_k))
+    memory.teach(primitive="noul", task=NOUL_TASK, input=INVOICE, value=0.0)
+    assert memory.recall(primitive="noul", task=NOUL_TASK, input=INVOICE) == []
+
+
 def test_recall_returns_top_k_by_similarity_descending(make_memory):
-    memory = make_memory(MemoryConfig(top_k=2, min_similarity=0.5))
+    memory = make_memory(MemoryConfig(top_k=2, min_similarity=0.5, observed_weight=0.25))
     variants = [INVOICE, INVOICE + " Please advise.", INVOICE + " Please advise urgently today."]
     ids = [
         memory.record(primitive="noul", task=NOUL_TASK, input=text, model_id="m1", value=0.9)
@@ -353,7 +487,8 @@ def test_blend_scalar_follows_the_design_formula(mem):
     assert blended == pytest.approx(0.4 * 0.9)
 
 
-def test_blend_scalar_uses_similarity_weighted_mean(mem):
+def test_blend_scalar_uses_similarity_weighted_mean(make_memory):
+    mem = make_memory(MemoryConfig(observed_weight=0.25))
     neighbours = [
         _recollection(1.0, value=1.0, rid="a"),
         _recollection(0.8, verified=False, value=0.0, rid="b"),
@@ -374,7 +509,8 @@ def test_blend_scalar_without_neighbours_is_unchanged(mem):
     assert adjustment.matches == 0
 
 
-def test_unverified_matches_move_output_less_than_verified(mem):
+def test_unverified_matches_move_output_less_than_verified(make_memory):
+    mem = make_memory(MemoryConfig(observed_weight=0.25))
     observed, _ = mem.blend_scalar(0.9, [_recollection(1.0, verified=False, value=0.0)])
     verified, _ = mem.blend_scalar(0.9, [_recollection(1.0, verified=True, value=0.0)])
     assert 0.9 > observed > verified
@@ -411,6 +547,18 @@ def test_blend_distribution_follows_the_design_formula(mem):
     assert adjustment.applied is True
     assert adjustment.influence == pytest.approx(0.6)
     assert adjustment.matches == 1
+
+
+def test_explicit_observed_weight_blends_unverified_choice_votes(make_memory):
+    mem = make_memory(MemoryConfig(observed_weight=0.25))
+    neighbours = [_recollection(1.0, verified=False, choice_id="it")]
+    probs, adjustment = mem.blend_distribution([0.7, 0.2, 0.1], OPTION_IDS, neighbours)
+    # The legacy opt-in gives alpha = 0.3 for one exact observed match.
+    assert probs == pytest.approx([0.7 * 0.7, 0.7 * 0.2 + 0.3, 0.7 * 0.1])
+    assert adjustment.applied is True
+    assert adjustment.influence == pytest.approx(0.3)
+    assert adjustment.matches == 1
+    assert adjustment.neighbours == neighbours
 
 
 def test_blend_distribution_ignores_unknown_option_ids(mem):

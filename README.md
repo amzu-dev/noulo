@@ -359,9 +359,12 @@ Windows, `noulo stop` terminates the process instead of sending a graceful signa
 - **OpenAI-compatible endpoints** need `logprobs` support for graded probabilities. Otherwise
   noulo falls back to strict label parsing (0/0.5/1) and logs a warning. Remote endpoints
   send your text off the machine.
-- **Learning memory:** unverified past outputs carry a small weight and can reinforce a
-  model's own mistakes on near-duplicate inputs. Use feedback, or set
-  `NOULO_MEMORY_OBSERVED_WEIGHT=0` for feedback-only learning.
+- **Learning memory:** only verified feedback influences answers by default
+  (`NOULO_MEMORY_OBSERVED_WEIGHT=0`). Explicitly enabling unverified-output learning can
+  reinforce the model's own mistakes. Existing `.env` overrides are preserved.
+- **Task wording matters:** descriptive Choice options can help the small model distinguish
+  categories. See the [accuracy guide](docs/accuracy.md) for measured before/after results,
+  the optional stronger model, and how to evaluate without teaching your test set.
 - **Stack deviation from the original requirements:** the runtime is Python/FastAPI (at the
   project owner's request) rather than Node.js. The optional Tauri desktop wrapper was not
   built; the frontend is served by the API instead.
@@ -414,6 +417,7 @@ openapi.json      generated API specification
 | [Models](docs/models.md) | Basic and larger models, switching, OpenAI endpoints, your own ONNX, calibration |
 | [Learning](docs/learning.md) | How the memory works, feedback, vector stores |
 | [Model comparison](docs/model-comparison.md) | Measured results for every catalog model and quantisation |
+| [Accuracy guide](docs/accuracy.md) | Descriptive options, verified learning, local before/after results and leakage-safe evaluation |
 | [GPU and accelerators](docs/gpu.md) | CoreML, CUDA, DirectML, ROCm: setup and measured speed-ups |
 | [Architecture](docs/architecture.md) | Design, lifecycle, concurrency, invariants |
 | [Development](docs/development.md) | Tests, TDD workflow, extending noulo |
