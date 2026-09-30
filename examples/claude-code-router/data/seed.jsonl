@@ -1,0 +1,48 @@
+{"prompt": "What does the calibrate function in engine.py do?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "How does the learning memory decide which past records to use?", "task": "explain", "complexity": "moderate", "tier": "light"}
+{"prompt": "Where is the CORS configuration read from?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "Explain the difference between the Noul and Score primitives in this codebase", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "Walk me through what happens end to end when a request hits /api/v1/choice", "task": "explain", "complexity": "moderate", "tier": "light"}
+{"prompt": "Why do we use ONNX Runtime instead of PyTorch here?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "Fix the typo in the README heading", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Rename the variable tmp_val to threshold in calibration.py", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Change the default port from 8787 to 9000 in the config", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Update the copyright year in the LICENSE header to 2026", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Add a missing comma in the JSON example in docs/api.md", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Make the error message for an empty proposition say 'must not be empty'", "task": "edit", "complexity": "simple", "tier": "light"}
+{"prompt": "Commit these changes and push to a new branch", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Run the test suite and tell me what fails", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Install the dev dependencies and run ruff format", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Bump the version to 0.1.0a2 and tag the release", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Delete the stale build artifacts in dist/", "task": "chore", "complexity": "trivial", "tier": "light"}
+{"prompt": "Rebase this branch on main", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Add OAuth login with Google to the web app", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "Add a --json flag to the status command", "task": "feature", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Implement rate limiting per API key on all /api/v1 endpoints", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "Support Postgres as a new vector store backend", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "Add a dark mode toggle to the frontend", "task": "feature", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Build a batch endpoint that evaluates up to 100 requests in one call", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "The test_engine tests fail with a KeyError since yesterday, find out why and fix it", "task": "debug", "complexity": "moderate", "tier": "deep"}
+{"prompt": "The server crashes with a segfault on startup on Linux ARM, investigate", "task": "debug", "complexity": "very complex", "tier": "max"}
+{"prompt": "Why does the choice endpoint return 500 when an option text contains an emoji?", "task": "debug", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Memory usage keeps growing until the process is killed, track down the leak", "task": "debug", "complexity": "very complex", "tier": "max"}
+{"prompt": "The CLI hangs forever when stdin is closed, fix it", "task": "debug", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Users report wrong scores after the last release, find the regression", "task": "debug", "complexity": "complex", "tier": "deep"}
+{"prompt": "Split the cli.py module into smaller modules without changing behaviour", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Extract the duplicated HTTP error handling into one helper", "task": "refactor", "complexity": "simple", "tier": "standard"}
+{"prompt": "Replace the nested if statements in validation.py with early returns", "task": "refactor", "complexity": "simple", "tier": "standard"}
+{"prompt": "Convert the config loader to use dataclasses, keep behaviour the same", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Clean up the unused imports and dead code in the repl package", "task": "refactor", "complexity": "simple", "tier": "standard"}
+{"prompt": "Move all hard-coded limits into a single constants module", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Should we use Postgres or SQLite for the learning memory? Plan the migration", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Design a plugin system so users can add their own primitives", "task": "design", "complexity": "very complex", "tier": "max"}
+{"prompt": "Plan how to support multiple languages, not just English", "task": "design", "complexity": "very complex", "tier": "max"}
+{"prompt": "Compare gRPC and REST for the internal API and recommend one", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Propose an architecture for running noulo as a multi-tenant service", "task": "design", "complexity": "very complex", "tier": "max"}
+{"prompt": "What is the best way to version the public API going forward?", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Review this PR for security issues", "task": "review", "complexity": "complex", "tier": "deep"}
+{"prompt": "Check the new upload handler for injection vulnerabilities", "task": "review", "complexity": "complex", "tier": "deep"}
+{"prompt": "Look over my changes in engine.py and point out bugs", "task": "review", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Audit the authentication code for timing attacks", "task": "review", "complexity": "complex", "tier": "deep"}
+{"prompt": "Is there anything slow in the vector search code? Review it for performance", "task": "review", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Review the diff before I merge it", "task": "review", "complexity": "moderate", "tier": "deep"}

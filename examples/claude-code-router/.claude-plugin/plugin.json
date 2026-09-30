@@ -1,0 +1,25 @@
+{
+  "name": "noulo-router",
+  "version": "0.1.0",
+  "description": "Routes each prompt to a Claude model tier chosen by a local noulo instance: noulo classifies the task and Claude delegates to a stronger model's subagent when the task needs it.",
+  "author": {"name": "amzu-dev", "url": "https://github.com/amzu-dev"},
+  "homepage": "https://github.com/amzu-dev/noulo/tree/main/examples/claude-code-router",
+  "repository": "https://github.com/amzu-dev/noulo",
+  "license": "Apache-2.0",
+  "keywords": ["noulo", "routing", "models", "effort", "classifier"],
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Routing mode",
+      "description": "auto: Claude hands a task to a stronger tier's subagent when noulo says it needs one. suggest: only show noulo's tier and the command that switches to it. off: don't route.",
+      "options": ["auto", "suggest", "off"],
+      "default": "auto"
+    },
+    "url": {
+      "type": "string",
+      "title": "noulo URL",
+      "description": "The noulo instance that makes routing decisions (a separate one from your other noulo work).",
+      "default": "http://127.0.0.1:8790"
+    }
+  }
+}

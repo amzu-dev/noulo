@@ -105,7 +105,8 @@ uv run noulo openapi -o openapi.json     # after any API change (a test checks f
 - Code map: `src/noulo/api/` (FastAPI, validation, schemas) · `src/noulo/inference/` (engine,
   NLI and LLM backends, calibration, learning memory, vector stores, devices) ·
   `src/noulo/cli.py` + `src/noulo/repl/` (CLI and interactive session) · `src/noulo/registry.py`
-  (models) · `src/noulo/benchmark/` · `tests/`. Architecture: [docs/architecture.md](docs/architecture.md).
+  (models) · `src/noulo/benchmark/` · `tests/` · `examples/claude-code-router/` (a Claude Code
+  plugin; a stdlib-only script tested by `tests/test_claude_code_router.py`). Architecture: [docs/architecture.md](docs/architecture.md).
 - Configuration is `NOULO_*` environment variables or `.env`
   ([docs/configuration.md](docs/configuration.md)).
 

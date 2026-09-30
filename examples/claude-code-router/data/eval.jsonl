@@ -1,0 +1,40 @@
+{"prompt": "What is the purpose of the registry module?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "How are calibration parameters stored for each model?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "Can you explain how the REPL parses slash commands?", "task": "explain", "complexity": "moderate", "tier": "light"}
+{"prompt": "What happens when the queue is full?", "task": "explain", "complexity": "simple", "tier": "light"}
+{"prompt": "Describe how the tokenizer truncates long inputs", "task": "explain", "complexity": "moderate", "tier": "light"}
+{"prompt": "Change the log level default from info to warning", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Fix the broken link to docs/gpu.md in the README", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Rename the function get_cfg to load_config everywhere", "task": "edit", "complexity": "simple", "tier": "light"}
+{"prompt": "Correct the spelling of 'recieve' in the error messages", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Set the default timeout to 30 seconds instead of 10", "task": "edit", "complexity": "trivial", "tier": "light"}
+{"prompt": "Push my commits and open a pull request", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Regenerate openapi.json", "task": "chore", "complexity": "trivial", "tier": "light"}
+{"prompt": "Update all dependencies to their latest versions and run the tests", "task": "chore", "complexity": "moderate", "tier": "light"}
+{"prompt": "Squash the last three commits into one", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Run the benchmark and save the results", "task": "chore", "complexity": "simple", "tier": "light"}
+{"prompt": "Add a /metrics endpoint that exposes Prometheus metrics", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "Let users export their learning memory as CSV", "task": "feature", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Add websocket streaming of evaluation results", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "Implement a new primitive that ranks a list of options", "task": "feature", "complexity": "very complex", "tier": "max"}
+{"prompt": "Add support for loading models from an S3 bucket", "task": "feature", "complexity": "complex", "tier": "deep"}
+{"prompt": "noulo start exits immediately with code 1 and no log, figure out why", "task": "debug", "complexity": "moderate", "tier": "deep"}
+{"prompt": "The isotonic calibration produces NaN for some models, fix it", "task": "debug", "complexity": "complex", "tier": "deep"}
+{"prompt": "Tests pass locally but fail in CI with a timeout, investigate", "task": "debug", "complexity": "complex", "tier": "deep"}
+{"prompt": "Requests randomly return 503 under light load, find the cause", "task": "debug", "complexity": "complex", "tier": "deep"}
+{"prompt": "The frontend shows a blank page after the last build, fix it", "task": "debug", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Break the 400-line evaluate function into smaller functions", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Rename the inference package to engine and update imports, no behaviour change", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Replace the custom retry loop with a shared utility", "task": "refactor", "complexity": "simple", "tier": "standard"}
+{"prompt": "Tidy up the test fixtures so they share one fake engine", "task": "refactor", "complexity": "moderate", "tier": "standard"}
+{"prompt": "Convert the remaining string formatting to f-strings", "task": "refactor", "complexity": "simple", "tier": "standard"}
+{"prompt": "How should we structure caching for embeddings across restarts? Give me options", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Plan the architecture for a GPU inference pool", "task": "design", "complexity": "very complex", "tier": "max"}
+{"prompt": "Design the data model for multi-user learning memories", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Which queueing approach should we use for batch jobs, and why?", "task": "design", "complexity": "complex", "tier": "deep"}
+{"prompt": "Sketch a roadmap for moving the backend from Python to Rust", "task": "design", "complexity": "very complex", "tier": "max"}
+{"prompt": "Review my last commit", "task": "review", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Check this function for race conditions", "task": "review", "complexity": "complex", "tier": "deep"}
+{"prompt": "Go through the API handlers and flag missing input validation", "task": "review", "complexity": "complex", "tier": "deep"}
+{"prompt": "Review the Dockerfile for security best practices", "task": "review", "complexity": "moderate", "tier": "deep"}
+{"prompt": "Critique the error handling in the service module", "task": "review", "complexity": "moderate", "tier": "deep"}

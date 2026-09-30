@@ -1,0 +1,12 @@
+{
+  "name": "noulo",
+  "description": "Claude Code plugins that use noulo, the local decision engine.",
+  "owner": {"name": "amzu-dev", "url": "https://github.com/amzu-dev"},
+  "plugins": [
+    {
+      "name": "noulo-router",
+      "source": "./examples/claude-code-router",
+      "description": "noulo classifies each prompt and Claude hands deep work to a stronger model's subagent."
+    }
+  ]
+}

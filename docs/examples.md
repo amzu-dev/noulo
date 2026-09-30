@@ -335,3 +335,12 @@ curl -s http://127.0.0.1:8787/api/v1/feedback -H 'Content-Type: application/json
 ```
 
 In the interactive session, just type `/good`, `/bad` or `/correct <answer>` after a result.
+
+## Use case: let noulo pick the Claude model for each prompt
+
+[`examples/claude-code-router`](../examples/claude-code-router/README.md) is a Claude Code
+plugin built on these primitives. A Choice decides what kind of task each prompt is (explain,
+edit, chore, feature, debug, refactor, design or review), and two Nouls check for large work and
+security. A small policy turns the answers into a model tier, and Claude hands deep work to a
+subagent on a stronger model. It includes held-out accuracy measurements and a teaching loop
+(`/noulo-router:correct`) that uses verified feedback.

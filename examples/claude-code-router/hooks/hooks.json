@@ -1,0 +1,28 @@
+{
+  "description": "noulo-router: ask noulo where each prompt should run; warn at session start if noulo isn't reachable.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/noulo_router.py\" hook session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/noulo_router.py\" hook prompt",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

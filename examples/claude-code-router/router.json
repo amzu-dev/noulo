@@ -1,0 +1,36 @@
+{
+  "question": "What kind of software engineering task is this request?",
+  "tasks": {
+    "explain": "Explain or answer a question about how existing code works, without changing it",
+    "edit": "Make a small, local edit such as fixing a typo, renaming something or changing one value",
+    "chore": "Run commands or routine chores such as git operations, installing dependencies, builds or formatting",
+    "feature": "Implement a new feature or add new behaviour to the software",
+    "debug": "Find and fix the cause of a bug, an error or a failing test",
+    "refactor": "Restructure or clean up existing code without changing what it does",
+    "design": "Design an architecture, plan an approach or compare technical trade-offs",
+    "review": "Review code for bugs, security or performance problems"
+  },
+  "large_work": "The request needs substantial work across many files or a deep investigation.",
+  "security": "The request involves security.",
+  "task_tiers": {
+    "explain": "light",
+    "edit": "light",
+    "chore": "light",
+    "refactor": "standard",
+    "feature": "deep",
+    "debug": "deep",
+    "design": "deep",
+    "review": "deep"
+  },
+  "tiers": {
+    "light": {"model": "haiku", "effort": "low"},
+    "standard": {"model": "sonnet", "effort": "medium"},
+    "deep": {"model": "opus", "effort": "high"},
+    "max": {"model": "fable", "effort": "xhigh"}
+  },
+  "min_confidence": 0.2,
+  "fallback_tier": "standard",
+  "max_at": 0.5,
+  "security_at": 0.8,
+  "followup_max_words": 3
+}

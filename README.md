@@ -400,6 +400,7 @@ src/noulo/
   cli.py · model_menu.py · service.py · registry.py · config.py · runtime.py · embedded.py
 models/           bundled models (Git LFS) + downloaded ones
 benchmark/data/   evaluation dataset (calibration + test splits)
+examples/         teaching.jsonl · claude-code-router/ (Claude Code plugin, see its README)
 docs/             documentation
 tests/            test suite
 openapi.json      generated API specification
@@ -411,6 +412,7 @@ openapi.json      generated API specification
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first run, first requests |
 | [Examples](docs/examples.md) | Noul, Choice and Score in the session, CLI, curl, JavaScript and Python |
+| [Claude Code router](examples/claude-code-router/README.md) | Use case: a Claude Code plugin where noulo picks the model tier for each prompt |
 | [CLI reference](docs/cli.md) | Every command, the interactive session, exit codes |
 | [REST API](docs/api.md) | Endpoints, schemas, errors, auth, examples |
 | [Configuration](docs/configuration.md) | Every `NOULO_*` setting, `.env`, security |
